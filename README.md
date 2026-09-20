@@ -70,15 +70,17 @@ $env:TYPESAFE_API_KEY="yourkey"; node server.js
 
 The HUD shows who is playing at all times:
 
-- A yellow **matchup line** under the title, e.g. `You  vs  Jev` or
-  `Local AI  vs  Local AI`, naming the actual driver of each colour.
+- A yellow **matchup line** under the title with stone glyphs, e.g.
+  `● You (Black)  vs  ○ Jev (White)` or
+  `● Local AI 1 (Black)  vs  ○ Local AI 2 (White)`, naming the actual
+  driver of each colour.
 - A bordered **player combinations** panel listing the possible
   matchups and how to switch between them.
 - The indicator in the bottom-right corner:
 
-- **green JEV** — Jev is active and choosing White's moves
-- **red LOCAL AI** — fallback to the built-in heuristic (no key, network
-  error, timeout, confidence below 0.3, or an illegal choice)
+- **green WHITE: JEV** — Jev is active and choosing White's moves
+- **red WHITE: LOCAL AI** — fallback to the built-in heuristic (no key,
+  network error, timeout, confidence below 0.3, or an illegal choice)
 
 ### Starting, stopping, restarting the server
 

@@ -363,10 +363,10 @@ function applyMove(m, color) {
   turn = color === BLACK ? WHITE : BLACK;
   draw();
   if (color === BLACK) {
-    setStatus(whiteLabel(true) + ' is thinking...');
+    setStatus(whiteLabel(true) + ' (White) is thinking...');
     setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
-    setStatus(whiteLabel(false) + ' played. ' + blackLabel() + ' is thinking...');
+    setStatus(whiteLabel(false) + ' (White) played. ' + blackLabel() + ' (Black) is thinking...');
     setTimeout(blackAutoMove, AUTO_DELAY);
   } else {
     setStatus('Your move.');
@@ -398,7 +398,7 @@ function jevMove() {
   if (!moves.length) { doPass(WHITE); return; }
   if (!Jev.isEnabled()) { fallbackToHeuristic(moves, null); return; }
   setHud(true);
-  setStatus('Jev is thinking...');
+  setStatus(whiteLabel(true) + ' (White) is thinking...');
   Jev.chooseMove(moves).then(sel => {
     if (gameOver) return;
     if (sel === 'pass') { doPass(WHITE); return; }
@@ -418,13 +418,13 @@ function doPass(color) {
   if (color === WHITE) {
     turn = BLACK;
     draw();
-    if (autoplay) { setStatus(whiteLabel(false) + ' passed. ' + blackLabel() + ' is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
-    else setStatus(whiteLabel(false) + ' passed. Your move — pass again to end.');
+    if (autoplay) { setStatus(whiteLabel(false) + ' (White) passed. ' + blackLabel() + ' (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
+    else setStatus(whiteLabel(false) + ' (White) passed. Your move — pass again to end.');
   } else {
     turn = WHITE;
     draw();
-    if (autoplay) { setStatus(blackLabel() + ' passed. ' + whiteLabel(true) + ' is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
-    else { setStatus('You passed. ' + whiteLabel(true) + ' is thinking...'); setTimeout(jevMove, 350); }
+    if (autoplay) { setStatus(blackLabel() + ' (Black) passed. ' + whiteLabel(true) + ' (White) is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
+    else { setStatus('You passed. ' + whiteLabel(true) + ' (White) is thinking...'); setTimeout(jevMove, 350); }
   }
 }
 
@@ -536,8 +536,8 @@ function draw(territory) {
 
 function updateScoreLine() {
   document.getElementById('score').textContent =
-    'Captures — ' + blackLabel() + ' (Black): ' + captures[BLACK] +
-    '   ' + whiteLabel(false) + ' (White): ' + captures[WHITE];
+    'Captures — \u25CF ' + blackLabel() + ' (Black): ' + captures[BLACK] +
+    '   \u25CB ' + whiteLabel(false) + ' (White): ' + captures[WHITE];
 }
 
 document.getElementById('board').addEventListener('click', e => {
@@ -557,6 +557,7 @@ function toggleAutoplay() {
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
   document.getElementById('autoBtn').textContent = autoplay ? 'Autoplay: on (0)' : 'Autoplay: off (0)';
   updateMatchup();
+  updateScoreLine();
   if (autoplay) {
     if (gameOver) newGame();
     setStatus('Autoplay: ' + whiteLabel(true) + ' (White) vs ' + blackLabel() + ' (Black).');
@@ -570,15 +571,15 @@ function toggleAutoplay() {
 function setHud(jev) {
   whiteIsJev = jev;
   const el = document.getElementById('jevhud');
-  el.textContent = jev ? 'JEV' : 'LOCAL AI';
+  el.textContent = jev ? 'WHITE: JEV' : 'WHITE: LOCAL AI';
   el.style.color = jev ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
 }
 
 function updateMatchup() {
-  const black = blackLabel() + ' (Black)';
-  const white = whiteLabel(false) + ' (White)';
+  const black = '\u25CF ' + blackLabel() + ' (Black)';
+  const white = '\u25CB ' + whiteLabel(false) + ' (White)';
   document.getElementById('matchup').textContent = black + '  vs  ' + white;
 }
 function refreshHud() { setHud(Jev.isEnabled()); }

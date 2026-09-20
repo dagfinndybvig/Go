@@ -272,11 +272,11 @@ but both players are the same heuristic.
 ## HUD and logging
 
 - **Matchup line** (under the title, yellow, large): exactly who is
-  playing who at any moment — `You (Black) vs Jev (White)`, `You (Black)
-  vs Local AI (White)`, `Local AI (Black) vs Jev (White)`, or `Local AI
-  1 (Black) vs Local AI 2 (White)` when both sides are the heuristic. It
-  updates whenever the mode changes or White's driver changes (e.g. a
-  fallback mid-game).
+  playing who at any moment, with stone glyphs — `● You (Black) vs
+  ○ Jev (White)`, `● You (Black) vs ○ Local AI (White)`, `● Local AI
+  (Black) vs ○ Jev (White)`, or `● Local AI 1 (Black) vs ○ Local AI 2
+  (White)` when both sides are the heuristic. It updates whenever the
+  mode changes or White's driver changes (e.g. a fallback mid-game).
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
   panel over the board. It is cleared by New game, Undo, or the
@@ -289,9 +289,10 @@ but both players are the same heuristic.
   does not — and the keys/buttons that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, and the game result with both scores.
-- **Score line**: captures for both sides, labeled "You (Black)" or
-  "Local AI 1 (Black)" depending on mode.
-- **`JEV` / `LOCAL AI`** (bottom-right): which AI is driving White.
+- **Score line**: captures for both sides with stone glyphs, labeled
+  "● You (Black)" or "● Local AI 1 (Black)" depending on mode.
+- **`WHITE: JEV` / `WHITE: LOCAL AI`** (bottom-right): which AI is
+  driving White — the prefix makes the colour explicit.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
