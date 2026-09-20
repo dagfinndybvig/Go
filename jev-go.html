@@ -12,6 +12,8 @@
   #modes b { color: #ffd54f; }
   #modes a { color: #7ec8ff; }
   canvas { background: #dcb35c; border-radius: 4px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+  #boardwrap { position: relative; }
+  #gameover { display: none; position: absolute; top: 42%; left: 50%; transform: translate(-50%, -50%); background: rgba(0,0,0,.8); color: #ff5252; font-size: 32px; font-weight: bold; text-align: center; padding: 16px 26px; border-radius: 8px; pointer-events: none; max-width: 420px; line-height: 1.3; }
   #controls { margin-top: 12px; }
   button { background: #444; color: #eee; border: 1px solid #666; padding: 6px 16px; margin: 0 4px; font-size: 15px; border-radius: 4px; cursor: pointer; }
   button:hover { background: #555; }
@@ -25,7 +27,10 @@
 <h1>Jev Go</h1>
 <div id="matchup"></div>
 <div id="status">Your move — you are Black.</div>
+<div id="boardwrap">
 <canvas id="board" width="468" height="468"></canvas>
+<div id="gameover"></div>
+</div>
 <div id="controls">
   <button id="passBtn">Pass</button>
   <button id="undoBtn">Undo</button>
@@ -65,6 +70,7 @@ function newGame() {
   jevLastChoice = null;
   passes = 0;
   gameOver = false;
+  document.getElementById('gameover').style.display = 'none';
   setStatus('Your move — you are Black.');
   draw();
 }
@@ -340,6 +346,19 @@ function heuristicPick(moves, color) {
 
 const AUTO_DELAY = 700; // pause between autoplay moves
 
+// Player labels. When the two heuristic AIs play each other (autoplay with
+// Jev unavailable) they are numbered: Local AI 1 (Black) vs Local AI 2 (White).
+function bothLocal() { return autoplay && !Jev.isEnabled(); }
+function blackLabel() {
+  if (!autoplay) return 'You';
+  return bothLocal() ? 'Local AI 1' : 'Local AI';
+}
+function whiteLabel(upcoming) {
+  const jev = upcoming ? Jev.isEnabled() : whiteIsJev;
+  if (jev) return 'Jev';
+  return bothLocal() ? 'Local AI 2' : 'Local AI';
+}
+
 function applyMove(m, color) {
   history.push({ board, captures: { ...captures }, lastMove, passes });
   board = m.board;
@@ -350,10 +369,10 @@ function applyMove(m, color) {
   turn = color === BLACK ? WHITE : BLACK;
   draw();
   if (color === BLACK) {
-    setStatus((Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...');
+    setStatus(whiteLabel(true) + ' is thinking...');
     setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
-    setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' played. Local AI (Black) is thinking...');
+    setStatus(whiteLabel(false) + ' played. ' + blackLabel() + ' is thinking...');
     setTimeout(blackAutoMove, AUTO_DELAY);
   } else {
     setStatus('Your move.');
@@ -405,13 +424,13 @@ function doPass(color) {
   if (color === WHITE) {
     turn = BLACK;
     draw();
-    if (autoplay) { setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' passed. Local AI (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
-    else setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' passed. Your move — pass again to end.');
+    if (autoplay) { setStatus(whiteLabel(false) + ' passed. ' + blackLabel() + ' is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
+    else setStatus(whiteLabel(false) + ' passed. Your move — pass again to end.');
   } else {
     turn = WHITE;
     draw();
-    if (autoplay) { setStatus('Local AI passed. ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
-    else { setStatus('You passed. ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...'); setTimeout(jevMove, 350); }
+    if (autoplay) { setStatus(blackLabel() + ' passed. ' + whiteLabel(true) + ' is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
+    else { setStatus('You passed. ' + whiteLabel(true) + ' is thinking...'); setTimeout(jevMove, 350); }
   }
 }
 
@@ -451,11 +470,14 @@ function endGame() {
     }
   const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5; // komi
   let msg;
-  if (scoreB > scoreW) msg = autoplay ? 'Game over — local AI (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
-  else if (scoreW > scoreB) msg = 'Game over — ' + (whiteIsJev ? 'Jev' : 'Local AI') + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
+  if (scoreB > scoreW) msg = autoplay ? 'Game over — ' + blackLabel() + ' (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
+  else if (scoreW > scoreB) msg = 'Game over — ' + whiteLabel(false) + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
   else msg = 'Game over — draw.';
   setStatus(msg + ' (komi 5.5 for White)');
   draw(owner);
+  const overlay = document.getElementById('gameover');
+  overlay.textContent = msg;
+  overlay.style.display = 'block';
   if (autoplay) setTimeout(() => { newGame(); if (autoplay) setTimeout(blackAutoMove, AUTO_DELAY); }, 4000);
 }
 
@@ -469,6 +491,7 @@ function undo() {
   passes = h.passes;
   turn = BLACK; // undo returns to the human's turn
   gameOver = false;
+  document.getElementById('gameover').style.display = 'none';
   setStatus('Your move — you are Black.');
   draw();
 }
@@ -519,8 +542,8 @@ function draw(territory) {
 
 function updateScoreLine() {
   document.getElementById('score').textContent =
-    'Captures — ' + (autoplay ? 'local AI (Black)' : 'you (Black)') + ': ' + captures[BLACK] +
-    '   ' + (whiteIsJev ? 'Jev' : 'Local AI') + ' (White): ' + captures[WHITE];
+    'Captures — ' + blackLabel() + ' (Black): ' + captures[BLACK] +
+    '   ' + whiteLabel(false) + ' (White): ' + captures[WHITE];
 }
 
 document.getElementById('board').addEventListener('click', e => {
@@ -542,11 +565,11 @@ function toggleAutoplay() {
   updateMatchup();
   if (autoplay) {
     if (gameOver) newGame();
-    setStatus('Autoplay: ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' (White) vs local AI (Black).');
+    setStatus('Autoplay: ' + whiteLabel(true) + ' (White) vs ' + blackLabel() + ' (Black).');
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
-    setStatus(turn === BLACK ? 'Your move — you are Black.' : (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...');
+    setStatus(turn === BLACK ? 'Your move — you are Black.' : whiteLabel(true) + ' is thinking...');
   }
 }
 
@@ -560,8 +583,8 @@ function setHud(jev) {
 }
 
 function updateMatchup() {
-  const black = autoplay ? 'Local AI (Black)' : 'You (Black)';
-  const white = whiteIsJev ? 'Jev (White)' : 'Local AI (White)';
+  const black = blackLabel() + ' (Black)';
+  const white = whiteLabel(false) + ' (White)';
   document.getElementById('matchup').textContent = black + '  vs  ' + white;
 }
 function refreshHud() { setHud(Jev.isEnabled()); }

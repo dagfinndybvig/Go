@@ -158,11 +158,13 @@ heuristic AI (Black), with no human input. Note that on Pages or when
 opening the file directly (no server), autoplay is heuristic vs
 heuristic, since Jev is only reachable through the local proxy. Each
 side moves on a ~700ms
-cadence, and when the game ends the result is shown for a few seconds
-before a new game starts automatically. The score line and game-over
-message name the local AI instead of "you", so you can watch the two
-approaches compete — Jev's sampled decisions against the greedy
-heuristic's captures-and-liberties play.
+cadence, and when the game ends the result appears in large red letters
+across the board for a few seconds before a new game starts
+automatically. The score line and game-over message name the AIs
+instead of "you" — when both sides are the same heuristic they are
+numbered **Local AI 1** (Black) vs **Local AI 2** (White) — so you can
+watch the two approaches compete: Jev's sampled decisions against the
+greedy heuristic's captures-and-liberties play.
 
 Toggling autoplay off mid-game returns control: you play Black from
 whatever position the board is in. Pass and Undo are disabled while

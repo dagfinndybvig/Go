@@ -247,8 +247,11 @@ input:
 - Each side moves on a ~700ms cadence (`AUTO_DELAY`).
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
-- The score line and game-over message name the *local AI* instead of
-  "you", so the readout makes sense for a machine-vs-machine game.
+- The score line and game-over message name the AIs instead of "you", so
+  the readout makes sense for a machine-vs-machine game. When both sides
+  are the same heuristic (autoplay with Jev unavailable) they are
+  numbered: **Local AI 1** (Black) vs **Local AI 2** (White). When Jev
+  plays White, Black is just "Local AI".
 - Pass and Undo are disabled; clicks are ignored.
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
@@ -273,8 +276,13 @@ but both players are the same heuristic.
 - **Matchup line** (under the title, yellow, large): exactly who is
   playing who at any moment — `You (Black) vs Jev (White)`, `You (Black)
   vs Local AI (White)`, `Local AI (Black) vs Jev (White)`, or `Local AI
-  (Black) vs Local AI (White)`. It updates whenever the mode changes or
-  White's driver changes (e.g. a fallback mid-game).
+  1 (Black) vs Local AI 2 (White)` when both sides are the heuristic. It
+  updates whenever the mode changes or White's driver changes (e.g. a
+  fallback mid-game).
+- **Game-over overlay** (across the board): when the game ends, the
+  result — winner and score — appears in large red letters on a dark
+  panel over the board. It is cleared by New game, Undo, or the
+  autoplay restart.
 - **Controls row**: Pass, Undo, New game, plus buttons for the mode
   options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
@@ -283,8 +291,8 @@ but both players are the same heuristic.
   does not — and the keys/buttons that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, and the game result with both scores.
-- **Score line**: captures for both sides, labeled "you (Black)" or
-  "local AI (Black)" depending on mode.
+- **Score line**: captures for both sides, labeled "You (Black)" or
+  "Local AI 1 (Black)" depending on mode.
 - **`JEV` / `LOCAL AI`** (bottom-right): which AI is driving White.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
