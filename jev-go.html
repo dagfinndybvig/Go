@@ -7,8 +7,9 @@
   body { background: #2b2b2b; color: #eee; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
   h1 { font-weight: normal; margin: 0 0 4px; }
   #status { min-height: 24px; margin: 8px 0; font-size: 18px; }
-  #matchup { min-height: 22px; font-size: 16px; color: #ffd54f; }
-  #modes { font-size: 12px; color: #999; margin-top: 8px; }
+  #matchup { min-height: 24px; font-size: 19px; color: #ffd54f; }
+  #modes { border: 1px solid #666; border-radius: 6px; padding: 8px 14px; margin-top: 10px; font-size: 13px; color: #ddd; background: rgba(0,0,0,.25); max-width: 560px; }
+  #modes b { color: #ffd54f; }
   canvas { background: #dcb35c; border-radius: 4px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
   #controls { margin-top: 12px; }
   button { background: #444; color: #eee; border: 1px solid #666; padding: 6px 16px; margin: 0 4px; font-size: 15px; border-radius: 4px; cursor: pointer; }
@@ -28,9 +29,18 @@
   <button id="passBtn">Pass</button>
   <button id="undoBtn">Undo</button>
   <button id="newBtn">New game</button>
+  <button id="autoBtn">Autoplay: off (0)</button>
+  <button id="keyBtn">Jev key (J)</button>
+  <button id="logBtn">Jev log (L)</button>
 </div>
 <div id="score"></div>
-<div id="modes">Modes: you vs Jev · you vs local AI (no key) · press 0: autoplay, Jev vs local AI · J: TypeSafe API key · L: Jev log</div>
+<div id="modes">
+  <b>Player combinations</b> — you vs <b>Jev</b> (default, needs a key) ·
+  you vs <b>local AI</b> (no key) ·
+  <b>Jev vs local AI</b> (autoplay)<br>
+  Keys: <b>0</b> toggle autoplay · <b>J</b> set Jev API key · <b>L</b> Jev log ·
+  or use the buttons above
+</div>
 <div id="jevhud"></div>
 <div id="autohud">AUTOPLAY (0 to toggle)</div>
 <div id="jevlog"></div>
@@ -526,6 +536,7 @@ let whiteIsJev = false;
 function toggleAutoplay() {
   autoplay = !autoplay;
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
+  document.getElementById('autoBtn').textContent = autoplay ? 'Autoplay: on (0)' : 'Autoplay: off (0)';
   updateMatchup();
   if (autoplay) {
     if (gameOver) newGame();
@@ -564,21 +575,26 @@ function renderJevLog() {
   ).join('\n') || 'No Jev decisions yet.';
 }
 
+function promptForKey() {
+  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev and use the local AI):', Jev.getKey() || '');
+  if (key !== null) Jev.setKey(key.trim());
+  refreshHud();
+}
+function toggleLog() {
+  const panel = document.getElementById('jevlog');
+  const show = panel.style.display !== 'block';
+  panel.style.display = show ? 'block' : 'none';
+  if (show) renderJevLog();
+}
 document.addEventListener('keydown', e => {
   const k = e.key.toLowerCase();
-  if (k === 'j') {
-    const key = prompt('Enter TypeSafe API key (leave empty to disable Jev and use the local AI):', Jev.getKey() || '');
-    if (key !== null) Jev.setKey(key.trim());
-    refreshHud();
-  } else if (k === '0') {
-    toggleAutoplay();
-  } else if (k === 'l') {
-    const panel = document.getElementById('jevlog');
-    const show = panel.style.display !== 'block';
-    panel.style.display = show ? 'block' : 'none';
-    if (show) renderJevLog();
-  }
+  if (k === 'j') promptForKey();
+  else if (k === '0') toggleAutoplay();
+  else if (k === 'l') toggleLog();
 });
+document.getElementById('autoBtn').addEventListener('click', toggleAutoplay);
+document.getElementById('keyBtn').addEventListener('click', promptForKey);
+document.getElementById('logBtn').addEventListener('click', toggleLog);
 
 newGame();
 refreshHud();
