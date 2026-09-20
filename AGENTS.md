@@ -49,11 +49,17 @@ There is no test framework. Tests are throwaway Node scripts using
   `textContent`.
 - Timing: `/jevstatus` resolves asynchronously (sleep ~50ms before
   asserting `Jev.isEnabled()`), and White's move fires after a 350ms
-  `setTimeout` (sleep ~600ms+ after a Black move).
+  `setTimeout` (sleep ~600ms+ after a Black move). Jev's fetch uses a
+  10s `AbortController` timeout — polyfill `AbortController` in the vm
+  context when testing `Jev.chooseMove`.
 - The heuristic has random tie-breaking (`Math.random() * 2` in the
   score). Never assert a specific move choice — assert stone counts.
 - Jev mocks: any probabilities work — the game plays the argmax over
   legal options (deterministic, no temperature sampling).
+- `filterMoves` reduces >30 legal moves to 30 candidates (captures,
+  near-stone, center bias) before sending to Jev. When mocking
+  `Jev.chooseMove`, the criteria will only contain filtered moves.
+- `labels()` takes no parameters — White is always Jev.
 - Delete test scripts when done; they are not committed.
 
 ### Shell quirks (Git Bash on Windows)
@@ -102,3 +108,14 @@ There is no test framework. Tests are throwaway Node scripts using
   up to 3 times (10s timeout per attempt); if all retries fail it shows
   an error message and does not play a move. The heuristic drives only
   Black in autoplay mode.
+- `filterMoves` reduces >30 legal moves to 30 candidates before
+  querying Jev. `chooseMove` receives filtered moves; `buildState` and
+  `describeMove` see the filtered set. The argmax in `chooseMove` only
+  considers filtered moves (plus `pass`).
+- `describeMove` always reports the resulting group's liberty count on
+  every move (not just dangerous ones), so Jev can judge safety. It also
+  detects saves from atari, atari threats, 2-liberty threats, group
+  extensions, and enemy contact.
+- `buildState` scans the board for all groups with 1-2 liberties and
+  lists them as "Groups in danger" with coordinates, so Jev sees threats
+  before choosing.

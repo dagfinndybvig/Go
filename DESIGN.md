@@ -6,20 +6,22 @@ decision model.
 
 ## Overview
 
-The player is Black; the machine is White. White is driven by Jev when a
-TypeSafe API key is available, and by a built-in local heuristic
-otherwise. The local heuristic is deliberately kept simple — it serves
-as the fallback when Jev is unavailable and as Jev's opponent in
-autoplay mode, so the two approaches can be compared directly.
+The player is Black; the machine is White. White is always driven by
+Jev — there is no fallback to the local heuristic. A built-in local
+heuristic drives Black in autoplay mode, so you can watch Jev's
+decisions against a greedy captures-and-liberties baseline. The local
+heuristic is deliberately kept simple — no sequence reading, no
+territory estimation — as a baseline for comparison.
 
 This design is inspired by, and follows the architecture of,
 [*Fight*](https://github.com/dagfinndybvig/Fight) — a one-on-one karate
 game in the same Arcade collection whose AI opponent is also driven by
 Jev. The Jev integration pattern (local CORS proxy, state text, `Choice`
-question, argmax move selection, heuristic fallback) and the autoplay and
-log-panel concepts originate there; this repo adapts them to Go's
-turn-based flow. Unlike Fight, Jev plays its best move here (argmax over
-the distribution) rather than a temperature-sampled one.
+question, argmax move selection) and the autoplay and log-panel concepts
+originate there; this repo adapts them to Go's turn-based flow. Unlike
+Fight, Jev plays its best move here (argmax over the distribution)
+rather than a temperature-sampled one, and there is no heuristic
+fallback — Jev always plays White.
 
 ## Rules implementation
 
@@ -85,6 +87,9 @@ Everything is drawn on a single 468x468 canvas — no assets.
   hoshi (star) points of a 9x9 board.
 - Stones are circles at intersections, radius 0.46 cells; black stones
   get a dark outline, white stones a light grey one.
+- Row 1 (y=0) is at the bottom of the canvas, row 9 (y=8) at the top —
+  standard Go orientation, matching the text board Jev sees. The click
+  handler inverts y accordingly: `y = (N-1) - round(...)`.
 - At game end, territory points are marked with small dots in the
   owner's color.
 - The last-move coordinate is tracked separately (`lastCoord`) for the
@@ -147,16 +152,18 @@ beginner strength.
 
 ### Jev AI (TypeSafe System One)
 
-When enabled, White's moves are chosen by Jev — a typed decision model
-that returns choices with probability distributions instead of
-generating text.
+White's moves are always chosen by Jev — a typed decision model that
+returns choices with probability distributions instead of generating
+text. There is no fallback to the local heuristic.
 
 - **Endpoint**: `POST /jev` (proxied) or `POST
   https://api.typesafe.ai/v1/systemone` (direct)
 - **Model**: `jev-latest`
 - **Question**: one `Choice` question named `move`
-- **Fetch timeout**: 3s via `AbortController`
-- **Confidence floor**: 0.3 — below this, fall back to the heuristic
+- **Fetch timeout**: 10s via `AbortController`
+- **Retry**: on error or timeout, `jevMove` retries up to 3 times (1s
+  between attempts). If all retries fail, an error message is shown and
+  no move is played — the game waits.
 
 #### State sent to Jev
 
@@ -169,17 +176,43 @@ generating text.
   traditional Go notation), `X` = White, `O` = Black, `.` = empty.
 - The opponent's last move and Jev's own previous move (so it can avoid
   repeating).
-- The number of legal moves.
+- **Groups in danger**: a list of all groups (both colors) with 1–2
+  liberties, with their coordinates and liberty count. This lets Jev
+  see threats before choosing a move.
+- The number of candidate moves and strategic guidance: save groups in
+  atari first, capture or attack weak opponent groups, keep groups
+  connected, avoid getting surrounded.
+
+#### Move filtering
+
+When there are more than 30 legal moves, `filterMoves()` reduces the
+options to the 30 most relevant ones before sending them to Jev:
+
+- Captures always included (priority 1000).
+- Moves near existing stones (Manhattan distance ≤ 2) get priority
+  (bonus 100).
+- Center bias (bonus up to 10 by Manhattan distance to center).
+- Slight randomness for variety (bonus 0–5).
+
+This focuses Jev on tactically meaningful moves instead of presenting
+70+ generic options where most are described as "open point".
 
 #### Choice criteria
 
-Every legal move is a criterion, keyed by its coordinate (`E5`), with a
-tactical annotation computed from the resulting position:
+Each candidate move is a criterion, keyed by its coordinate (`E5`),
+with a tactical annotation computed from the resulting position:
 
 - `captures N stone(s)` — how many stones the move takes
+- `saves your group at X from atari (now N liberties)` — rescues a
+  friendly group that was in atari before the move
 - `puts an opponent group in atari` — leaves an enemy group with one
   liberty
-- `self-atari risk` — leaves the played group with one liberty
+- `reduces an opponent group to 2 liberties` — threatens an enemy group
+- `self-atari (1 liberty after move)` / `unsafe (2 liberties after
+  move)` / `3 liberties after move` / `N liberties after move` — always
+  reported so Jev can judge safety of every move
+- `extends your group` — connects to a friendly group
+- `contact with enemy` — adjacent to an enemy stone
 - `edge point` / `open point` — fallback annotation for quiet moves
 
 Plus one extra criterion, `pass`, so Jev can end the game when nothing
@@ -188,23 +221,25 @@ is worth playing.
 #### Move selection
 
 Jev plays optimally: the game picks the highest-probability legal option
-from the returned distribution (argmax), not a random sample. One filter
-applies first: options that are not legal moves (or `pass`) are dropped.
-If probabilities are missing, Jev's top pick is used as is. There is no
-temperature and no randomness — the same position always gets the same
-move.
+from the returned distribution (argmax), not a random sample. One
+filter applies first: options that are not legal moves (or `pass`) are
+dropped. If probabilities are missing, Jev's top pick is used as is.
+There is no temperature and no randomness — the same position always
+gets the same move.
 
-#### Fallback chain
+#### Error handling
 
-White falls back to the local heuristic when:
+There is no heuristic fallback. If Jev is unavailable:
 
-- No API key is available (neither browser key nor server key).
-- The fetch times out (3s) or errors (network, HTTP status, malformed
-  response).
-- Confidence is below 0.3.
-- Jev's choice is not a legal move (e.g. it named an occupied point).
+- No API key: the HUD shows "WHITE: JEV (NO KEY)" and the status line
+  says "Jev API key required — press J to enter a key." No move is
+  played.
+- Timeout (10s) or network error: `jevMove` retries up to 3 times with
+  1s between attempts. If all retries fail, an error message is shown
+  and the game waits — it does not substitute the heuristic.
+- Illegal choice: retried up to 3 times, then an error message is shown.
 
-Every fallback is logged with its reason; every successful decision is
+Every error is logged with its reason; every successful decision is
 logged with both Jev's original pick and the played pick.
 
 ## When you can play against Jev
@@ -214,15 +249,14 @@ the TypeSafe API does not send CORS headers:
 
 | How you open the game | Jev? | Why |
 | --- | --- | --- |
-| `file://` (double-click `jev-go.html`) | Never | The game tries the API directly; browsers block cross-origin calls from `file://`, so every poll fails and White falls back to the heuristic. |
+| `file://` (double-click `jev-go.html`) | No, until you enter a key | The game tries the API directly; browsers block cross-origin calls from `file://`. White does not move until you press `J` and enter a key — there is no heuristic fallback. |
 | `http://localhost:3000` (`node server.js`) | Yes, if a key exists | The proxy forwards `POST /jev` server-side. The server injects `TYPESAFE_API_KEY` from its environment; a browser key entered with `J` also works and takes precedence. |
-| Hosted (GitHub Pages) | Never | There is no proxy on Pages, so `/jev` returns 404 and every poll falls back. Pressing `J` sets a key but cannot help — the request path itself does not exist. |
+| Hosted (GitHub Pages) | No, until you enter a key | There is no proxy on Pages, so `/jev` returns 404. White does not move — there is no heuristic fallback. Press `J` and enter a key to enable Jev directly against the API (CORS permitting). |
 
 The HUD in the bottom-right corner reflects this at all times:
 
-- **green `JEV`** — Jev is enabled and choosing White's moves
-- **red `LOCAL AI`** — the heuristic is driving White (no key, network
-  error, timeout, low confidence, or illegal choice)
+- **green `WHITE: JEV`** — Jev is enabled and choosing White's moves
+- **red `WHITE: JEV (NO KEY)`** — no API key set; White is waiting
 
 `GET /jevstatus` reports `{ serverKey: true/false }`; the game polls it
 once at startup to enable Jev without a browser key.
@@ -233,9 +267,9 @@ There are two play modes, toggled with **0**:
 
 ### Manual mode (default)
 
-You click to place Black stones; White is Jev (or the heuristic
-fallback). Pass and Undo work. Clicks during White's turn or after game
-over are ignored.
+You click to place Black stones; White is Jev. Pass and Undo work.
+Clicks during White's turn or after game over are ignored. Without an
+API key, White does not move — press `J` to enter one.
 
 ### Autoplay mode
 
@@ -245,17 +279,15 @@ input:
 - Each side moves on a ~700ms cadence (`AUTO_DELAY`).
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
-- The score line and game-over message name the AIs instead of "you", so
-  the readout makes sense for a machine-vs-machine game. Whenever White
-  is the heuristic in autoplay — including after a mid-game Jev
-  fallback — the pair is numbered: **Local AI 1** (Black) vs **Local AI
-  2** (White). When Jev plays White, Black is just "Local AI". Labels
-  are computed by one `labels(whiteIsJevNow)` function so the pair is
-  always consistent within a context.
+- The score line and game-over message name the AIs instead of "you":
+  **Local AI** (Black) vs **Jev** (White). Labels are computed by one
+  `labels()` function (no parameters — White is always Jev) so the
+  pair is always consistent.
 - Pass and Undo are disabled; clicks are ignored.
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
   resumes.
+- Autoplay requires an API key; without one, White does not move.
 
 **What autoplay actually compares depends on hosting** — this is the
 subtle part:
@@ -263,22 +295,19 @@ subtle part:
 | Hosting | Autoplay is |
 | --- | --- |
 | `localhost:3000` with a key | Jev vs local heuristic — the real comparison |
-| `localhost:3000` without a key | heuristic vs heuristic (White falls back) |
-| GitHub Pages or `file://` | heuristic vs heuristic (Jev cannot run there) |
+| `localhost:3000` without a key | Jev vs local heuristic, but White stalls (no key) |
+| GitHub Pages or `file://` | Same — White stalls until a key is entered |
 
 So the Jev-vs-heuristic comparison is only meaningful when the game is
 served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
-`J`). On Pages, autoplay still demonstrates the game loop end to end,
-but both players are the same heuristic.
+`J`).
 
 ## HUD and logging
 
 - **Matchup line** (under the title, yellow, large): exactly who is
-  playing who at any moment, with stone glyphs — `● You (Black) vs
-  ○ Jev (White)`, `● You (Black) vs ○ Local AI (White)`, `● Local AI
-  (Black) vs ○ Jev (White)`, or `● Local AI 1 (Black) vs ○ Local AI 2
-  (White)` when both sides are the heuristic. It updates whenever the
-  mode changes or White's driver changes (e.g. a fallback mid-game).
+  playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)` or
+  `● Local AI (Black) vs ○ Jev (White)` in autoplay. White is always
+  Jev.
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
   panel over the board. It is cleared by New game, Undo, or the
@@ -286,20 +315,19 @@ but both players are the same heuristic.
 - **Controls row**: Pass, Undo, New game, plus buttons for the mode
   options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
-- **Player combinations panel** (under the score, bordered): the three
-  possible matchups — noting that Jev needs an API key and the local AI
-  does not — and the keys/buttons that switch them.
+- **Player combinations panel** (under the score, bordered): the
+  matchups — you vs Jev (needs an API key), or local AI vs Jev
+  (autoplay) — and the keys/buttons that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
-  move reasons, and the game result with both scores.
+  move reasons, retry status, and the game result with both scores.
 - **Score line**: captures for both sides with stone glyphs, labeled
-  "● You (Black)" or "● Local AI 1 (Black)" depending on mode.
-- **`WHITE: JEV` / `WHITE: LOCAL AI`** (bottom-right): which AI is
-  driving White — the prefix makes the colour explicit. In autoplay with
-  both sides heuristic it reads `WHITE: LOCAL AI 2`.
+  "● You (Black)" or "● Local AI (Black)" depending on mode.
+- **`WHITE: JEV` / `WHITE: JEV (NO KEY)`** (bottom-right): whether Jev
+  is enabled. Green when active, red when no key is set.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
-  when the argmax overrode it; fallbacks are shown with their reason.
+  when the argmax overrode it; errors are shown with their reason.
 - **Console**: `window.jevLog()` returns the full 200-entry ring buffer;
   `window.jevClear()` empties it. Log entries carry `{ t, ok, choice,
   jevChoice, confidence, state, probabilities, reason }`.
@@ -333,13 +361,15 @@ is stopped.
 every request, so changes to `jev-go.html` need no restart — a browser
 refresh picks them up. Changes to `server.js` require a restart.
 
-**Mid-game failure**: if the server dies while a game is open, the page
-keeps working — Jev polls fail and White falls back to the local
-heuristic (HUD turns red). Once the server is back, Jev resumes
-automatically on White's next turn, provided the server had a key when
-the page was loaded (`serverKey` is detected once at startup). If the
-page was loaded while the server was down, reload the page after
-starting the server, or press `J` and enter a key.
+**Mid-game failure**: if the server dies while a game is open, Jev
+polls fail and White stops moving — the HUD turns red and shows "NO
+KEY". The game retries up to 3 times (10s timeout per attempt) before
+showing an error message; it does not substitute the heuristic. Once
+the server is back, Jev resumes automatically on White's next turn,
+provided the server had a key when the page was loaded (`serverKey` is
+detected once at startup). If the page was loaded while the server was
+down, reload the page after starting the server, or press `J` and
+enter a key.
 
 ### Constants
 
@@ -349,7 +379,8 @@ starting the server, or press `J` and enter a key.
 | `MARGIN` | 30 px | Grid inset on the canvas |
 | `CELL` | 51 px | Intersection spacing ((468 − 60) / 8) |
 | `AUTO_DELAY` | 700 ms | Pause between autoplay moves |
-| `CONFIDENCE_FLOOR` | 0.3 | Below this, Jev's answer is discarded |
+| `MAX_OPTIONS` | 30 | Max candidate moves sent to Jev |
 | `LOG_MAX` | 200 | Jev decision ring-buffer size |
-| fetch timeout | 3000 ms | Jev poll timeout via `AbortController` |
+| fetch timeout | 10000 ms | Jev poll timeout via `AbortController` |
+| retry limit | 3 | Retries on error/timeout before giving up |
 | komi | 5.5 | Points added to White's area score |

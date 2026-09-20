@@ -131,22 +131,29 @@ the server, or press `J` and enter a key.
 On each White turn:
 
 1. **State** — the game builds a text description: the board diagram,
-   captures, both players' last moves, and komi.
-2. **Question** — a single `Choice` question is POSTed to the TypeSafe
+   captures, both players' last moves, komi, and a list of all groups
+   with 1-2 liberties ("Groups in danger") so Jev sees threats.
+2. **Filter** — when there are more than 30 legal moves, the game
+   selects the 30 most relevant: captures, atari saves, moves near
+   existing stones, and center bias. This focuses Jev on tactically
+   meaningful options instead of 70+ generic "open point" choices.
+3. **Question** — a single `Choice` question is POSTed to the TypeSafe
    System One API (model `jev-latest`) through the local proxy: one
-   option per legal move, each annotated with its tactical features
-   (captures, atari, self-atari risk), plus a `pass` option.
-3. **Decision** — Jev returns the chosen point, a probability
+   option per candidate move, each annotated with its tactical effects
+   (captures, saves from atari, atari threats, resulting group
+   liberties, group extensions, enemy contact), plus a `pass` option.
+4. **Decision** — Jev returns the chosen point, a probability
    distribution over all options, and a confidence score. No text
    generation — one typed round trip per turn.
-4. **Pick** — the game plays the highest-probability legal option from
+5. **Pick** — the game plays the highest-probability legal option from
    the distribution: Jev's best move, with no randomness.
-5. **Retry** — on timeout (10s) or error, the game retries up to 3
+6. **Retry** — on timeout (10s) or error, the game retries up to 3
    times before showing an error message. Jev always plays White — no
    fallback to the local heuristic.
 
 ```
-board state → text → POST /jev → choice + probabilities + confidence
+board state + group threats → text → filter to 30 candidates
+            → POST /jev → choice + probabilities + confidence
             → argmax over legal options → White plays
 ```
 

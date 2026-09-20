@@ -186,6 +186,19 @@ const Jev = (() => {
   function describeMove(m) {
     const bits = [];
     if (m.captured > 0) bits.push('captures ' + m.captured + (m.captured === 1 ? ' stone' : ' stones'));
+    // Resulting own group liberties (group safety after the move)
+    const ownG = groupAndLiberties(m.board, m.x, m.y);
+    // Check if this move saves a friendly group from atari
+    for (const [nx, ny] of neighbors(m.x, m.y)) {
+      if (board[ny][nx] === WHITE) {
+        const preG = groupAndLiberties(board, nx, ny);
+        if (preG.libs === 1) {
+          const postG = groupAndLiberties(m.board, nx, ny);
+          bits.push('saves your group at ' + coordName(preG.group[0][0], preG.group[0][1]) + ' from atari (now ' + postG.libs + ' liberties)');
+        }
+      }
+    }
+    // Puts opponent group in atari or captures (already handled above for captures)
     let atari = false;
     for (const [nx, ny] of neighbors(m.x, m.y)) {
       if (m.board[ny][nx] === BLACK) {
@@ -194,7 +207,28 @@ const Jev = (() => {
       }
     }
     if (atari) bits.push('puts an opponent group in atari');
-    if (groupAndLiberties(m.board, m.x, m.y).libs === 1) bits.push('self-atari risk');
+    // Threatens opponent group (reduces to 2 liberties)
+    let threatens = false;
+    for (const [nx, ny] of neighbors(m.x, m.y)) {
+      if (m.board[ny][nx] === BLACK) {
+        const g = groupAndLiberties(m.board, nx, ny);
+        if (g.libs === 2) threatens = true;
+      }
+    }
+    if (threatens) bits.push('reduces an opponent group to 2 liberties');
+    // Always report resulting group liberties so Jev can judge safety
+    if (ownG.libs === 1) bits.push('self-atari (1 liberty after move)');
+    else if (ownG.libs === 2) bits.push('unsafe (2 liberties after move)');
+    else if (ownG.libs === 3) bits.push('3 liberties after move');
+    else bits.push(ownG.libs + ' liberties after move');
+    // Approaches / extends
+    let extendsOwn = false, approachesEnemy = false;
+    for (const [nx, ny] of neighbors(m.x, m.y)) {
+      if (m.board[ny][nx] === WHITE) extendsOwn = true;
+      if (board[ny] && board[ny][nx] === BLACK) approachesEnemy = true;
+    }
+    if (extendsOwn) bits.push('extends your group');
+    if (approachesEnemy) bits.push('contact with enemy');
     if (!bits.length) {
       const edge = m.x === 0 || m.x === N - 1 || m.y === 0 || m.y === N - 1;
       bits.push(edge ? 'edge point' : 'open point');
@@ -217,7 +251,22 @@ const Jev = (() => {
   }
 
   function buildState(moves) {
-    return [
+    // Scan for groups with 1-2 liberties (threats both colors must respond to)
+    const seen = new Set();
+    const threats = [];
+    for (let y = 0; y < N; y++)
+      for (let xx = 0; xx < N; xx++) {
+        if (board[y][xx] === EMPTY || seen.has(xx + ',' + y)) continue;
+        const g = groupAndLiberties(board, xx, y);
+        for (const [gx, gy] of g.group) seen.add(gx + ',' + gy);
+        if (g.libs <= 2) {
+          const color = board[y][xx] === WHITE ? 'your' : 'opponent';
+          const label = g.libs === 1 ? 'atari' : '2 liberties';
+          const stones = g.group.map(c => coordName(c[0], c[1])).join(',');
+          threats.push(color + ' group [' + stones + '] has ' + label + ' (' + g.group.length + ' stone' + (g.group.length === 1 ? '' : 's') + ')');
+        }
+      }
+    const lines = [
       'Game of Go on a 9x9 board. You are White (X); your opponent is Black (O). You receive komi 5.5.',
       'Area scoring: at game end each side scores its stones on the board plus empty regions it surrounds alone. Two consecutive passes end the game.',
       'Captures so far: you ' + captures[WHITE] + ', opponent ' + captures[BLACK] + '.',
@@ -225,8 +274,13 @@ const Jev = (() => {
       boardText(),
       "Opponent's last move: " + (lastCoord ? coordName(lastCoord.x, lastCoord.y) : 'none (start of game or a pass)'),
       'Your previous move: ' + (jevLastChoice || 'none yet'),
-      'There are ' + moves.length + ' legal moves, listed in the criteria. Choose the strongest point for White.',
-    ].join('\n');
+    ];
+    if (threats.length) {
+      lines.push('Groups in danger:');
+      for (const t of threats) lines.push('  ' + t);
+    }
+    lines.push('There are ' + moves.length + ' candidate moves, listed in the criteria. Choose the strongest point for White. Prioritise saving your groups from atari, capturing opponent groups in atari, and attacking weak opponent groups. On 9x9, group safety is critical — keep your groups connected and do not let them get surrounded.');
+    return lines.join('\n');
   }
 
   async function query(moves) {
@@ -240,7 +294,7 @@ const Jev = (() => {
       questions: {
         move: {
           type: 'choice',
-          instructions: 'Which point should White play next? Pick the move with the best balance of captures, atari, territory and group safety.',
+          instructions: 'Which point should White play next? Save groups in atari first, then capture or attack weak opponent groups, then build territory. Avoid self-atari unless it captures. Each option lists its tactical effects.',
           criteria,
         },
       },
@@ -270,13 +324,42 @@ const Jev = (() => {
     return { choice: ans.choice, confidence: ans.confidence || 0, probabilities: ans.probabilities || null, state: stateStr };
   }
 
+  // Filter legal moves to the most relevant ones so Jev can focus.
+  // Always include: captures, atari saves, moves near existing stones.
+  // Limit to MAX_OPTIONS to avoid overwhelming the decision model.
+  const MAX_OPTIONS = 30;
+  function filterMoves(moves) {
+    if (moves.length <= MAX_OPTIONS) return moves;
+    const scored = moves.map(m => {
+      let s = 0;
+      if (m.captured > 0) s += 1000;
+      // Near existing stones (Manhattan distance ≤ 2)
+      let nearStones = false;
+      for (let dy = -2; dy <= 2; dy++)
+        for (let dx = -2; dx <= 2; dx++) {
+          const nx = m.x + dx, ny = m.y + dy;
+          if (nx < 0 || nx >= N || ny < 0 || ny >= N) continue;
+          if (board[ny][nx] !== EMPTY) nearStones = true;
+        }
+      if (nearStones) s += 100;
+      // Center bias
+      s += 10 - (Math.abs(m.x - 4) + Math.abs(m.y - 4));
+      // Slight randomness for variety
+      s += Math.random() * 5;
+      return { m, s };
+    });
+    scored.sort((a, b) => b.s - a.s);
+    return scored.slice(0, MAX_OPTIONS).map(x => x.m);
+  }
+
   async function chooseMove(moves) {
-    const res = await query(moves);
+    const filtered = filterMoves(moves);
+    const res = await query(filtered);
     // Play Jev's best option: the highest-probability legal move. No
     // temperature sampling — Jev plays optimally, not for variety.
     let picked = res.choice;
     if (res.probabilities) {
-      const legal = new Set(moves.map(m => coordName(m.x, m.y)));
+      const legal = new Set(filtered.map(m => coordName(m.x, m.y)));
       legal.add('pass');
       const entries = Object.entries(res.probabilities).filter(([k]) => legal.has(k));
       if (entries.length) {
