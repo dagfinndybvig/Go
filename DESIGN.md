@@ -289,6 +289,7 @@ but both players are the same heuristic.
 ## Architecture
 
 ```
+index.html    — redirect to jev-go.html (GitHub Pages serves index.html at the root)
 jev-go.html   — entire game: rules, rendering, both AIs, UI (single file, no dependencies)
 server.js     — local Node.js server + Jev CORS proxy (run: node server.js)
 ```
