@@ -388,8 +388,8 @@ function fallbackToHeuristic(moves, reason) {
   if (reason) Jev.logEntry({ t: Date.now(), ok: false, reason: String(reason), choice: null, confidence: null, state: null, probabilities: null });
   setHud(false);
   const pick = heuristicPick(moves, WHITE);
-  if (pick.pass) doPass(WHITE);
-  else applyMove(pick.move, WHITE);
+  if (pick.pass) { jevLastChoice = null; doPass(WHITE); }
+  else { jevLastChoice = Jev.coordName(pick.move.x, pick.move.y); applyMove(pick.move, WHITE); }
 }
 
 // White's turn: ask Jev for the move, fall back to the local heuristic.
@@ -512,7 +512,7 @@ function draw(territory) {
   // star points (hoshi) for 9x9
   for (const [sx, sy] of [[2,2],[6,2],[4,4],[2,6],[6,6]]) {
     ctx.beginPath();
-    ctx.arc(MARGIN + sx * CELL, MARGIN + sy * CELL, 3, 0, Math.PI * 2);
+    ctx.arc(MARGIN + sx * CELL, MARGIN + (N - 1 - sy) * CELL, 3, 0, Math.PI * 2);
     ctx.fillStyle = '#5a3d1e';
     ctx.fill();
   }
@@ -520,7 +520,7 @@ function draw(territory) {
   for (let y = 0; y < N; y++)
     for (let x = 0; x < N; x++) {
       const v = board[y][x];
-      const px = MARGIN + x * CELL, py = MARGIN + y * CELL;
+      const px = MARGIN + x * CELL, py = MARGIN + (N - 1 - y) * CELL;
       if (v !== EMPTY) {
         ctx.beginPath();
         ctx.arc(px, py, R, 0, Math.PI * 2);
@@ -548,7 +548,7 @@ function updateScoreLine() {
 document.getElementById('board').addEventListener('click', e => {
   const rect = e.target.getBoundingClientRect();
   const x = Math.round((e.clientX - rect.left - MARGIN) / CELL);
-  const y = Math.round((e.clientY - rect.top - MARGIN) / CELL);
+  const y = (N - 1) - Math.round((e.clientY - rect.top - MARGIN) / CELL);
   if (x >= 0 && x < N && y >= 0 && y < N) humanPlay(x, y);
 });
 document.getElementById('passBtn').addEventListener('click', () => { if (!autoplay) doPass(BLACK); });
