@@ -57,6 +57,9 @@ There is no test framework. Tests are throwaway Node scripts using
 
 ### Shell quirks (Git Bash on Windows)
 
+- The bash tool runs Git Bash (MINGW64), not cmd.exe/PowerShell. Windows
+  paths fail: `cd C:\Users\...` errors with "No such file or directory".
+  Use POSIX paths: `cd /c/Users/dybvig/Arcade/Go`.
 - `$1`/`$2` inside double-quoted `node -e "..."` strings are expanded by
   bash to empty strings — regex replacements silently produce
   `getB()[][]`-style garbage. Use the edit tool for source changes, not
