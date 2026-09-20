@@ -288,6 +288,29 @@ to `https://api.typesafe.ai/v1/systemone`, forwarding the browser's
 browser sent none (a browser key always wins). `GET /jevstatus` reports
 whether a server-side key is present.
 
+### Server lifecycle
+
+**Starting**: `node server.js` from the game folder serves the game on
+`http://localhost:3000` and prints whether a server-side key was found.
+
+**Stopping**: `Ctrl+C` in the terminal, or — for a background instance —
+kill the process holding port 3000 (`netstat -ano | findstr :3000` then
+`taskkill /F /PID <pid>` on Windows; `lsof -ti :3000 | xargs kill` on
+macOS/Linux). A second instance fails with `EADDRINUSE` until the first
+is stopped.
+
+**Restarting**: stop, then start. Static files are read from disk on
+every request, so changes to `jev-go.html` need no restart — a browser
+refresh picks them up. Changes to `server.js` require a restart.
+
+**Mid-game failure**: if the server dies while a game is open, the page
+keeps working — Jev polls fail and White falls back to the local
+heuristic (HUD turns red). Once the server is back, Jev resumes
+automatically on White's next turn, provided the server had a key when
+the page was loaded (`serverKey` is detected once at startup). If the
+page was loaded while the server was down, reload the page after
+starting the server, or press `J` and enter a key.
+
 ### Constants
 
 | Constant | Value | Purpose |

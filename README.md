@@ -61,6 +61,49 @@ The HUD in the bottom-right corner shows the AI status:
 - **red LOCAL AI** — fallback to the built-in heuristic (no key, network
   error, timeout, confidence below 0.3, or an illegal choice)
 
+### Starting, stopping, restarting the server
+
+**Start** — from the game folder:
+
+```
+cd C:\Users\dybvig\Arcade\Go
+node server.js
+```
+
+It prints a banner, the game URL, and whether a server-side key was
+found. The game is then at **http://localhost:3000**.
+
+**Stop** — press `Ctrl+C` in the terminal running it. If it runs in the
+background with no terminal, kill the process holding port 3000:
+
+```
+# Windows (cmd.exe / PowerShell)
+netstat -ano | findstr :3000
+taskkill /F /PID <pid>
+
+# macOS / Linux
+lsof -ti :3000 | xargs kill
+```
+
+**Restart** — stop it, then start it again. Two things worth knowing:
+
+- Changes to `jev-go.html` do **not** need a restart — static files are
+  read from disk on every request, so a browser refresh picks them up.
+- Changes to `server.js` **do** need a restart.
+
+**Port already in use** — if startup fails with
+`Error: listen EADDRINUSE: address already in use :::3000`, a previous
+instance is still running. Stop it with the commands above, then start
+again.
+
+**If the server stops mid-game** — the page keeps working: Jev polls
+fail and White falls back to the local heuristic (the HUD turns red).
+Once the server is running again, Jev resumes automatically on White's
+next turn — no page reload needed, as long as the server had a key when
+the page was loaded. If the page was loaded while the server was down,
+either reload the page after starting the server, or press `J` and enter
+a key.
+
 ## How it works
 
 On each White turn:
