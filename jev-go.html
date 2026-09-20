@@ -43,7 +43,7 @@
 <div id="modes">
   <b>Player combinations</b> — you vs <b>Jev</b> (default, an API key is needed) ·
   you vs <b>local AI</b> (no API key needed) ·
-  <b>Jev vs local AI</b> (autoplay)<br>
+  <b>local AI vs Jev</b> (autoplay)<br>
   Keys: <b>0</b> toggle autoplay · <b>J</b> enter API key (Jev needs it) · <b>L</b> Jev log ·
   or use the buttons above ·
   <a href="https://en.wikipedia.org/wiki/Go_(game)" target="_blank" rel="noopener">Go on Wikipedia</a>
@@ -565,7 +565,7 @@ function toggleAutoplay() {
   if (autoplay) {
     if (gameOver) newGame();
     const L = labels(Jev.isEnabled());
-    setStatus('Autoplay: ' + L.white + ' (White) vs ' + L.black + ' (Black).');
+    setStatus('Autoplay: ' + L.black + ' (Black) vs ' + L.white + ' (White).');
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
