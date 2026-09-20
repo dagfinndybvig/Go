@@ -262,6 +262,13 @@ but both players are the same heuristic.
 
 ## HUD and logging
 
+- **Matchup line** (under the title, yellow): exactly who is playing who
+  at any moment — `You (Black) vs Jev (White)`, `You (Black) vs Local AI
+  (White)`, `Local AI (Black) vs Jev (White)`, or `Local AI (Black) vs
+  Local AI (White)`. It updates whenever the mode changes or White's
+  driver changes (e.g. a fallback mid-game).
+- **Modes hint** (under the score): the possible player combinations and
+  the keys that switch them (`0` autoplay, `J` API key, `L` log).
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, and the game result with both scores.
 - **Score line**: captures for both sides, labeled "you (Black)" or

@@ -7,6 +7,8 @@
   body { background: #2b2b2b; color: #eee; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
   h1 { font-weight: normal; margin: 0 0 4px; }
   #status { min-height: 24px; margin: 8px 0; font-size: 18px; }
+  #matchup { min-height: 22px; font-size: 16px; color: #ffd54f; }
+  #modes { font-size: 12px; color: #999; margin-top: 8px; }
   canvas { background: #dcb35c; border-radius: 4px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
   #controls { margin-top: 12px; }
   button { background: #444; color: #eee; border: 1px solid #666; padding: 6px 16px; margin: 0 4px; font-size: 15px; border-radius: 4px; cursor: pointer; }
@@ -19,6 +21,7 @@
 </head>
 <body>
 <h1>Jev Go</h1>
+<div id="matchup"></div>
 <div id="status">Your move — you are Black.</div>
 <canvas id="board" width="468" height="468"></canvas>
 <div id="controls">
@@ -27,6 +30,7 @@
   <button id="newBtn">New game</button>
 </div>
 <div id="score"></div>
+<div id="modes">Modes: you vs Jev · you vs local AI (no key) · press 0: autoplay, Jev vs local AI · J: TypeSafe API key · L: Jev log</div>
 <div id="jevhud"></div>
 <div id="autohud">AUTOPLAY (0 to toggle)</div>
 <div id="jevlog"></div>
@@ -522,6 +526,7 @@ let whiteIsJev = false;
 function toggleAutoplay() {
   autoplay = !autoplay;
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
+  updateMatchup();
   if (autoplay) {
     if (gameOver) newGame();
     setStatus('Autoplay: Jev (White) vs local AI (Black).');
@@ -538,6 +543,13 @@ function setHud(jev) {
   el.textContent = jev ? 'JEV' : 'LOCAL AI';
   el.style.color = jev ? '#4caf50' : '#e53935';
   updateScoreLine();
+  updateMatchup();
+}
+
+function updateMatchup() {
+  const black = autoplay ? 'Local AI (Black)' : 'You (Black)';
+  const white = whiteIsJev ? 'Jev (White)' : 'Local AI (White)';
+  document.getElementById('matchup').textContent = black + '  vs  ' + white;
 }
 function refreshHud() { setHud(Jev.isEnabled()); }
 
@@ -570,6 +582,7 @@ document.addEventListener('keydown', e => {
 
 newGame();
 refreshHud();
+updateMatchup();
 </script>
 </body>
 </html>
