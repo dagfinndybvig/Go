@@ -246,10 +246,12 @@ input:
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
 - The score line and game-over message name the AIs instead of "you", so
-  the readout makes sense for a machine-vs-machine game. When both sides
-  are the same heuristic (autoplay with Jev unavailable) they are
-  numbered: **Local AI 1** (Black) vs **Local AI 2** (White). When Jev
-  plays White, Black is just "Local AI".
+  the readout makes sense for a machine-vs-machine game. Whenever White
+  is the heuristic in autoplay — including after a mid-game Jev
+  fallback — the pair is numbered: **Local AI 1** (Black) vs **Local AI
+  2** (White). When Jev plays White, Black is just "Local AI". Labels
+  are computed by one `labels(whiteIsJevNow)` function so the pair is
+  always consistent within a context.
 - Pass and Undo are disabled; clicks are ignored.
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
@@ -292,7 +294,8 @@ but both players are the same heuristic.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI 1 (Black)" depending on mode.
 - **`WHITE: JEV` / `WHITE: LOCAL AI`** (bottom-right): which AI is
-  driving White — the prefix makes the colour explicit.
+  driving White — the prefix makes the colour explicit. In autoplay with
+  both sides heuristic it reads `WHITE: LOCAL AI 2`.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick

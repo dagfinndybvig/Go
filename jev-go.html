@@ -342,15 +342,15 @@ const AUTO_DELAY = 700; // pause between autoplay moves
 
 // Player labels. When the two heuristic AIs play each other (autoplay with
 // Jev unavailable) they are numbered: Local AI 1 (Black) vs Local AI 2 (White).
-function bothLocal() { return autoplay && !Jev.isEnabled(); }
-function blackLabel() {
-  if (!autoplay) return 'You';
-  return bothLocal() ? 'Local AI 1' : 'Local AI';
-}
-function whiteLabel(upcoming) {
-  const jev = upcoming ? Jev.isEnabled() : whiteIsJev;
-  if (jev) return 'Jev';
-  return bothLocal() ? 'Local AI 2' : 'Local AI';
+// Player labels, always consistent within one context. In autoplay, when
+// White is not driven by Jev, both sides are the same heuristic and are
+// numbered: Local AI 1 (Black) vs Local AI 2 (White). whiteIsJevNow is
+// whether White is Jev in this context: Jev.isEnabled() for the upcoming
+// move, whiteIsJev for the move just played.
+function labels(whiteIsJevNow) {
+  if (!autoplay) return { black: 'You', white: whiteIsJevNow ? 'Jev' : 'Local AI' };
+  if (whiteIsJevNow) return { black: 'Local AI', white: 'Jev' };
+  return { black: 'Local AI 1', white: 'Local AI 2' };
 }
 
 function applyMove(m, color) {
@@ -363,10 +363,11 @@ function applyMove(m, color) {
   turn = color === BLACK ? WHITE : BLACK;
   draw();
   if (color === BLACK) {
-    setStatus(whiteLabel(true) + ' (White) is thinking...');
+    setStatus(labels(Jev.isEnabled()).white + ' (White) is thinking...');
     setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
-    setStatus(whiteLabel(false) + ' (White) played. ' + blackLabel() + ' (Black) is thinking...');
+    const L = labels(whiteIsJev);
+    setStatus(L.white + ' (White) played. ' + L.black + ' (Black) is thinking...');
     setTimeout(blackAutoMove, AUTO_DELAY);
   } else {
     setStatus('Your move.');
@@ -398,7 +399,7 @@ function jevMove() {
   if (!moves.length) { doPass(WHITE); return; }
   if (!Jev.isEnabled()) { fallbackToHeuristic(moves, null); return; }
   setHud(true);
-  setStatus(whiteLabel(true) + ' (White) is thinking...');
+  setStatus(labels(Jev.isEnabled()).white + ' (White) is thinking...');
   Jev.chooseMove(moves).then(sel => {
     if (gameOver) return;
     if (sel === 'pass') { doPass(WHITE); return; }
@@ -418,13 +419,15 @@ function doPass(color) {
   if (color === WHITE) {
     turn = BLACK;
     draw();
-    if (autoplay) { setStatus(whiteLabel(false) + ' (White) passed. ' + blackLabel() + ' (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
-    else setStatus(whiteLabel(false) + ' (White) passed. Your move — pass again to end.');
+    const L = labels(whiteIsJev);
+    if (autoplay) { setStatus(L.white + ' (White) passed. ' + L.black + ' (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
+    else setStatus(L.white + ' (White) passed. Your move — pass again to end.');
   } else {
     turn = WHITE;
     draw();
-    if (autoplay) { setStatus(blackLabel() + ' (Black) passed. ' + whiteLabel(true) + ' (White) is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
-    else { setStatus('You passed. ' + whiteLabel(true) + ' (White) is thinking...'); setTimeout(jevMove, 350); }
+    const L = labels(Jev.isEnabled());
+    if (autoplay) { setStatus(L.black + ' (Black) passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
+    else { setStatus('You passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, 350); }
   }
 }
 
@@ -463,9 +466,10 @@ function endGame() {
       if (board[y][x] === WHITE) stonesW++;
     }
   const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5; // komi
+  const L = labels(whiteIsJev);
   let msg;
-  if (scoreB > scoreW) msg = autoplay ? 'Game over — ' + blackLabel() + ' (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
-  else if (scoreW > scoreB) msg = 'Game over — ' + whiteLabel(false) + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
+  if (scoreB > scoreW) msg = autoplay ? 'Game over — ' + L.black + ' (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
+  else if (scoreW > scoreB) msg = 'Game over — ' + L.white + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
   else msg = 'Game over — draw.';
   setStatus(msg + ' (komi 5.5 for White)');
   draw(owner);
@@ -535,9 +539,10 @@ function draw(territory) {
 }
 
 function updateScoreLine() {
+  const L = labels(whiteIsJev);
   document.getElementById('score').textContent =
-    'Captures — \u25CF ' + blackLabel() + ' (Black): ' + captures[BLACK] +
-    '   \u25CB ' + whiteLabel(false) + ' (White): ' + captures[WHITE];
+    'Captures — \u25CF ' + L.black + ' (Black): ' + captures[BLACK] +
+    '   \u25CB ' + L.white + ' (White): ' + captures[WHITE];
 }
 
 document.getElementById('board').addEventListener('click', e => {
@@ -556,31 +561,31 @@ function toggleAutoplay() {
   autoplay = !autoplay;
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
   document.getElementById('autoBtn').textContent = autoplay ? 'Autoplay: on (0)' : 'Autoplay: off (0)';
-  updateMatchup();
-  updateScoreLine();
+  refreshHud();
   if (autoplay) {
     if (gameOver) newGame();
-    setStatus('Autoplay: ' + whiteLabel(true) + ' (White) vs ' + blackLabel() + ' (Black).');
+    const L = labels(Jev.isEnabled());
+    setStatus('Autoplay: ' + L.white + ' (White) vs ' + L.black + ' (Black).');
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
-    setStatus(turn === BLACK ? 'Your move — you are Black.' : whiteLabel(true) + ' is thinking...');
+    setStatus(turn === BLACK ? 'Your move — you are Black.' : labels(Jev.isEnabled()).white + ' (White) is thinking...');
   }
 }
 
 function setHud(jev) {
   whiteIsJev = jev;
   const el = document.getElementById('jevhud');
-  el.textContent = jev ? 'WHITE: JEV' : 'WHITE: LOCAL AI';
+  el.textContent = 'WHITE: ' + labels(jev).white.toUpperCase();
   el.style.color = jev ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
 }
 
 function updateMatchup() {
-  const black = '\u25CF ' + blackLabel() + ' (Black)';
-  const white = '\u25CB ' + whiteLabel(false) + ' (White)';
-  document.getElementById('matchup').textContent = black + '  vs  ' + white;
+  const L = labels(whiteIsJev);
+  document.getElementById('matchup').textContent =
+    '\u25CF ' + L.black + ' (Black)  vs  \u25CB ' + L.white + ' (White)';
 }
 function refreshHud() { setHud(Jev.isEnabled()); }
 
