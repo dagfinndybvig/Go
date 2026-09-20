@@ -12,6 +12,14 @@ otherwise. The local heuristic is deliberately kept simple — it serves
 as the fallback when Jev is unavailable and as Jev's opponent in
 autoplay mode, so the two approaches can be compared directly.
 
+This design is inspired by, and follows the architecture of,
+[*Fight*](https://github.com/dagfinndybvig/Fight) — a one-on-one karate
+game in the same Arcade collection whose AI opponent is also driven by
+Jev. The Jev integration pattern (local CORS proxy, state text, `Choice`
+question, temperature sampling, heuristic fallback) and the autoplay and
+log-panel concepts originate there; this repo adapts them to Go's
+turn-based flow.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
