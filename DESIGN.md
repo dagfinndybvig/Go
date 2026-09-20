@@ -16,9 +16,10 @@ This design is inspired by, and follows the architecture of,
 [*Fight*](https://github.com/dagfinndybvig/Fight) — a one-on-one karate
 game in the same Arcade collection whose AI opponent is also driven by
 Jev. The Jev integration pattern (local CORS proxy, state text, `Choice`
-question, temperature sampling, heuristic fallback) and the autoplay and
+question, argmax move selection, heuristic fallback) and the autoplay and
 log-panel concepts originate there; this repo adapts them to Go's
-turn-based flow.
+turn-based flow. Unlike Fight, Jev plays its best move here (argmax over
+the distribution) rather than a temperature-sampled one.
 
 ## Rules implementation
 
@@ -184,16 +185,14 @@ tactical annotation computed from the resulting position:
 Plus one extra criterion, `pass`, so Jev can end the game when nothing
 is worth playing.
 
-#### Sampling
+#### Move selection
 
-Jev's top pick is not used directly. The game samples from the full
-probability distribution with a random temperature of 1.6–2.4 per poll
-(`weight = probability^(1/temperature)`), which flattens the
-distribution and produces natural variety. Two filters apply before
-sampling: options that are not legal moves (or `pass`) are dropped, and
-Jev's previous choice is excluded so no two consecutive identical
-decisions occur. If probabilities are missing, the top pick is used as
-is.
+Jev plays optimally: the game picks the highest-probability legal option
+from the returned distribution (argmax), not a random sample. One filter
+applies first: options that are not legal moves (or `pass`) are dropped.
+If probabilities are missing, Jev's top pick is used as is. There is no
+temperature and no randomness — the same position always gets the same
+move.
 
 #### Fallback chain
 
@@ -203,11 +202,10 @@ White falls back to the local heuristic when:
 - The fetch times out (3s) or errors (network, HTTP status, malformed
   response).
 - Confidence is below 0.3.
-- Jev's sampled choice is not a legal move (e.g. it named an occupied
-  point).
+- Jev's choice is not a legal move (e.g. it named an occupied point).
 
 Every fallback is logged with its reason; every successful decision is
-logged with both Jev's original pick and the sampled pick.
+logged with both Jev's original pick and the played pick.
 
 ## When you can play against Jev
 
@@ -297,7 +295,7 @@ but both players are the same heuristic.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
-  when sampling overrode it; fallbacks are shown with their reason.
+  when the argmax overrode it; fallbacks are shown with their reason.
 - **Console**: `window.jevLog()` returns the full 200-entry ring buffer;
   `window.jevClear()` empties it. Log entries carry `{ t, ok, choice,
   jevChoice, confidence, state, probabilities, reason }`.
@@ -350,5 +348,4 @@ starting the server, or press `J` and enter a key.
 | `CONFIDENCE_FLOOR` | 0.3 | Below this, Jev's answer is discarded |
 | `LOG_MAX` | 200 | Jev decision ring-buffer size |
 | fetch timeout | 3000 ms | Jev poll timeout via `AbortController` |
-| temperature | 1.6–2.4 | Random per-poll sampling temperature |
 | komi | 5.5 | Points added to White's area score |

@@ -278,21 +278,15 @@ const Jev = (() => {
       addLog({ t: Date.now(), ok: false, reason: 'low_conf', choice: res.choice, confidence: res.confidence, state: res.state, probabilities: res.probabilities });
       throw new Error('low confidence ' + res.confidence.toFixed(2));
     }
+    // Play Jev's best option: the highest-probability legal move. No
+    // temperature sampling — Jev plays optimally, not for variety.
     let picked = res.choice;
     if (res.probabilities) {
-      const temp = 1.6 + Math.random() * 0.8;
       const legal = new Set(moves.map(m => coordName(m.x, m.y)));
       legal.add('pass');
-      const entries = Object.entries(res.probabilities)
-        .filter(([k]) => legal.has(k) && k !== jevLastChoice);
+      const entries = Object.entries(res.probabilities).filter(([k]) => legal.has(k));
       if (entries.length) {
-        const weights = entries.map(([, v]) => Math.pow(v, 1 / temp));
-        const sum = weights.reduce((a, b) => a + b, 0);
-        let r = Math.random() * sum;
-        for (let i = 0; i < entries.length; i++) {
-          r -= weights[i];
-          if (r <= 0) { picked = entries[i][0]; break; }
-        }
+        picked = entries.reduce((a, b) => (b[1] > a[1] ? b : a))[0];
       }
     }
     jevLastChoice = picked === 'pass' ? null : picked;

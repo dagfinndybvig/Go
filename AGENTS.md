@@ -51,8 +51,8 @@ There is no test framework. Tests are throwaway Node scripts using
   `setTimeout` (sleep ~600ms+ after a Black move).
 - The heuristic has random tie-breaking (`Math.random() * 2` in the
   score). Never assert a specific move choice — assert stone counts.
-- Jev mocks: use `probabilities: { CHOICE: 1.0 }`. Real-shaped
-  distributions get temperature-sampled (1.6–2.4) and will flake.
+- Jev mocks: any probabilities work — the game plays the argmax over
+  legal options (deterministic, no temperature sampling).
 - Delete test scripts when done; they are not committed.
 
 ### Shell quirks (Git Bash on Windows)

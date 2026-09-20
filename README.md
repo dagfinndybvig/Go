@@ -136,15 +136,14 @@ On each White turn:
 3. **Decision** — Jev returns the chosen point, a probability
    distribution over all options, and a confidence score. No text
    generation — one typed round trip per turn.
-4. **Sampling** — the game samples from the distribution with a random
-   temperature (1.6–2.4) and never repeats the previous move, so play is
-   varied rather than deterministic.
+4. **Pick** — the game plays the highest-probability legal option from
+   the distribution: Jev's best move, with no randomness.
 5. **Fallback** — on timeout (3s), error, low confidence (< 0.3), or an
    illegal pick, White switches to the built-in heuristic AI.
 
 ```
 board state → text → POST /jev → choice + probabilities + confidence
-            → temperature sample → White plays
+            → argmax over legal options → White plays
 ```
 
 Press **L** in-game to watch the decisions live. In the browser console,
@@ -163,8 +162,8 @@ across the board for a few seconds before a new game starts
 automatically. The score line and game-over message name the AIs
 instead of "you" — when both sides are the same heuristic they are
 numbered **Local AI 1** (Black) vs **Local AI 2** (White) — so you can
-watch the two approaches compete: Jev's sampled decisions against the
-greedy heuristic's captures-and-liberties play.
+watch the two approaches compete: Jev's best moves against the greedy
+heuristic's captures-and-liberties play.
 
 Toggling autoplay off mid-game returns control: you play Black from
 whatever position the board is in. Pass and Undo are disabled while
