@@ -350,10 +350,10 @@ function applyMove(m, color) {
   turn = color === BLACK ? WHITE : BLACK;
   draw();
   if (color === BLACK) {
-    setStatus('Jev is thinking...');
+    setStatus((Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...');
     setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
-    setStatus('Jev played. Local AI (Black) is thinking...');
+    setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' played. Local AI (Black) is thinking...');
     setTimeout(blackAutoMove, AUTO_DELAY);
   } else {
     setStatus('Your move.');
@@ -405,13 +405,13 @@ function doPass(color) {
   if (color === WHITE) {
     turn = BLACK;
     draw();
-    if (autoplay) { setStatus('Jev passed. Local AI (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
-    else setStatus('Jev passed. Your move — pass again to end.');
+    if (autoplay) { setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' passed. Local AI (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
+    else setStatus((whiteIsJev ? 'Jev' : 'Local AI') + ' passed. Your move — pass again to end.');
   } else {
     turn = WHITE;
     draw();
-    if (autoplay) { setStatus('Local AI passed. Jev is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
-    else { setStatus('You passed. Jev is thinking...'); setTimeout(jevMove, 350); }
+    if (autoplay) { setStatus('Local AI passed. ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
+    else { setStatus('You passed. ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...'); setTimeout(jevMove, 350); }
   }
 }
 
@@ -452,7 +452,7 @@ function endGame() {
   const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5; // komi
   let msg;
   if (scoreB > scoreW) msg = autoplay ? 'Game over — local AI (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
-  else if (scoreW > scoreB) msg = 'Game over — Jev wins, ' + scoreW + ' to ' + scoreB + '.';
+  else if (scoreW > scoreB) msg = 'Game over — ' + (whiteIsJev ? 'Jev' : 'Local AI') + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
   else msg = 'Game over — draw.';
   setStatus(msg + ' (komi 5.5 for White)');
   draw(owner);
@@ -542,11 +542,11 @@ function toggleAutoplay() {
   updateMatchup();
   if (autoplay) {
     if (gameOver) newGame();
-    setStatus('Autoplay: Jev (White) vs local AI (Black).');
+    setStatus('Autoplay: ' + (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' (White) vs local AI (Black).');
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
-    setStatus(turn === BLACK ? 'Your move — you are Black.' : 'Jev is thinking...');
+    setStatus(turn === BLACK ? 'Your move — you are Black.' : (Jev.isEnabled() ? 'Jev' : 'Local AI') + ' is thinking...');
   }
 }
 
