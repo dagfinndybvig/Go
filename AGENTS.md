@@ -5,10 +5,11 @@ Notes for coding agents working in this repo. Read this before editing.
 ## What this is
 
 A 9x9 Go game (`jev-go.html`, single file, no dependencies) whose White
-stones are played by the TypeSafe "System One" decision model (Jev) when
-an API key is available, with a local greedy heuristic as fallback.
-`server.js` is a zero-dependency Node proxy that makes Jev work locally.
-See DESIGN.md for architecture and README.md for usage.
+stones are always played by the TypeSafe "System One" decision model
+(Jev) — no fallback to a local heuristic. A local greedy heuristic
+drives Black in autoplay mode. `server.js` is a zero-dependency Node
+proxy that makes Jev work locally. See DESIGN.md for architecture and
+README.md for usage.
 
 ## Gotchas
 
@@ -83,9 +84,9 @@ There is no test framework. Tests are throwaway Node scripts using
 
 - `index.html` is a redirect to `jev-go.html`. Without it, Pages renders
   README.md instead of the game. Do not delete it.
-- Jev never runs on Pages (no proxy; `/jev` 404s) — White falls back to
-  the heuristic there. Don't "fix" this by pointing the browser at the
-  API directly; CORS blocks it. Local-only Jev is the accepted design.
+- Jev never runs on Pages (no proxy; `/jev` 404s) — White does not move
+  there until the user enters a browser key. Don't "fix" this by
+  pointing the browser at the API directly; CORS blocks it.
 - The user pushes from the web UI and other sessions concurrently.
   Expect push rejections; `git fetch` + `git rebase origin/main`, then
   push. Never force-push without asking.
@@ -95,11 +96,9 @@ There is no test framework. Tests are throwaway Node scripts using
 - `lastMove` holds a full board snapshot (for the ko check), not a
   coordinate. `lastCoord` is the display/state-text coordinate. Keep
   both updated in `applyMove` and `doPass`.
-- White's driver is reflected in three places that must agree: the HUD
-  (`setHud`), the score line, and the matchup line — all driven by
-  `whiteIsJev`. Status texts must name the actual driver
-  (`Jev.isEnabled()` for the *upcoming* move, `whiteIsJev` for the move
-  just played), never hardcode "Jev".
-- The fallback chain (no key, timeout 3s, HTTP error, confidence < 0.1,
-  illegal choice) must always land on `heuristicPick` — the game must
-  never stall or crash when Jev is unreachable.
+- White is always Jev — no fallback to the local heuristic. The HUD
+  (`setHud`), score line, and matchup line always show "Jev" for White.
+  `labels()` takes no parameters. On error or timeout, `jevMove` retries
+  up to 3 times (10s timeout per attempt); if all retries fail it shows
+  an error message and does not play a move. The heuristic drives only
+  Black in autoplay mode.

@@ -4,15 +4,17 @@
 
 A small 9x9 Go game where the White stones are played by
 [Jev](https://www.typesafe.ai), TypeSafe AI's "System One" decision model.
-You play Black against either Jev or a built-in local heuristic AI.
+You play Black against Jev. In autoplay mode, a built-in local heuristic
+AI plays Black against Jev's White.
 
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 
 The game is also served from GitHub Pages:
-**https://dagfinndybvig.github.io/Go/** — there (and when opening
-`jev-go.html` directly) it runs with the local heuristic AI only, since
-Jev needs the local proxy server and an API key (see Running below).
+**https://dagfinndybvig.github.io/Go/** — Jev needs the local proxy
+server and an API key (see Running below), so on Pages (or when opening
+`jev-go.html` directly without a server) White will not move until you
+press J and enter a key.
 
 ## Rules
 
@@ -72,15 +74,14 @@ The HUD shows who is playing at all times:
 
 - A yellow **matchup line** under the title with stone glyphs, e.g.
   `● You (Black)  vs  ○ Jev (White)` or
-  `● Local AI 1 (Black)  vs  ○ Local AI 2 (White)`, naming the actual
-  driver of each colour.
+  `● Local AI (Black)  vs  ○ Jev (White)` (autoplay), naming the
+  actual driver of each colour.
 - A bordered **player combinations** panel listing the possible
   matchups and how to switch between them.
 - The indicator in the bottom-right corner:
 
 - **green WHITE: JEV** — Jev is active and choosing White's moves
-- **red WHITE: LOCAL AI** — fallback to the built-in heuristic (no key,
-  network error, timeout, confidence below 0.1, or an illegal choice)
+- **red WHITE: JEV (NO KEY)** — no API key set; press J to enter one
 
 ### Starting, stopping, restarting the server
 
@@ -117,13 +118,13 @@ lsof -ti :3000 | xargs kill
 instance is still running. Stop it with the commands above, then start
 again.
 
-**If the server stops mid-game** — the page keeps working: Jev polls
-fail and White falls back to the local heuristic (the HUD turns red).
-Once the server is running again, Jev resumes automatically on White's
-next turn — no page reload needed, as long as the server had a key when
-the page was loaded. If the page was loaded while the server was down,
-either reload the page after starting the server, or press `J` and enter
-a key.
+**If the server stops mid-game** — Jev polls fail and White stops
+moving (the HUD turns red and shows "NO KEY"). The game retries up to
+3 times before showing an error. Once the server is running again, Jev
+resumes automatically on White's next turn — no page reload needed, as
+long as the server had a key when the page was loaded. If the page was
+loaded while the server was down, either reload the page after starting
+the server, or press `J` and enter a key.
 
 ## How it works
 
@@ -140,8 +141,9 @@ On each White turn:
    generation — one typed round trip per turn.
 4. **Pick** — the game plays the highest-probability legal option from
    the distribution: Jev's best move, with no randomness.
-5. **Fallback** — on timeout (3s), error, low confidence (< 0.1), or an
-   illegal pick, White switches to the built-in heuristic AI.
+5. **Retry** — on timeout (10s) or error, the game retries up to 3
+   times before showing an error message. Jev always plays White — no
+   fallback to the local heuristic.
 
 ```
 board state → text → POST /jev → choice + probabilities + confidence
@@ -155,17 +157,14 @@ empties the log.
 ## Autoplay mode
 
 Press **0** to toggle autoplay: Jev (White) plays against the local
-heuristic AI (Black), with no human input. Note that on Pages or when
-opening the file directly (no server), autoplay is heuristic vs
-heuristic, since Jev is only reachable through the local proxy. Each
-side moves on a ~700ms
+heuristic AI (Black), with no human input. Each side moves on a ~700ms
 cadence, and when the game ends the result appears in large red letters
 across the board for a few seconds before a new game starts
 automatically. The score line and game-over message name the AIs
-instead of "you" — when both sides are the same heuristic they are
-numbered **Local AI 1** (Black) vs **Local AI 2** (White) — so you can
-watch the two approaches compete: Jev's best moves against the greedy
-heuristic's captures-and-liberties play.
+instead of "you" — **Local AI** (Black) vs **Jev** (White) — so you
+can watch Jev's best moves against the greedy heuristic's
+captures-and-liberties play. Autoplay requires an API key; without one,
+White does not move.
 
 Toggling autoplay off mid-game returns control: you play Black from
 whatever position the board is in. Pass and Undo are disabled while

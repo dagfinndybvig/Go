@@ -41,8 +41,7 @@
 </div>
 <div id="score"></div>
 <div id="modes">
-  <b>Player combinations</b> — you vs <b>Jev</b> (default, an API key is needed) ·
-  you vs <b>local AI</b> (no API key needed) ·
+  <b>Player combinations</b> — you vs <b>Jev</b> (an API key is needed) ·
   <b>local AI vs Jev</b> (autoplay)<br>
   Keys: <b>0</b> toggle autoplay · <b>J</b> enter API key (Jev needs it) · <b>L</b> Jev log ·
   or use the buttons above ·
@@ -157,14 +156,13 @@ function legalMoves(bd, color, koBoard) {
 // ---- Jev AI (TypeSafe System One) ----
 // When a TypeSafe API key is available (browser key entered with J, or the
 // server's TYPESAFE_API_KEY injected by server.js), White's moves are chosen
-// by the Jev decision model. Falls back to the local heuristic on error,
-// timeout, or low confidence.
+// by the Jev decision model. Jev always plays — no fallback to the local
+// heuristic. On error or timeout, the game retries and waits.
 const Jev = (() => {
   const ENDPOINT = location.protocol.startsWith('http')
     ? '/jev'
     : 'https://api.typesafe.ai/v1/systemone';
   const MODEL = 'jev-latest';
-  const CONFIDENCE_FLOOR = 0.1;
   const COLS = 'ABCDEFGHJ';
   const LOG_MAX = 200;
   const log = [];
@@ -248,7 +246,7 @@ const Jev = (() => {
       },
     };
     const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 3000);
+    const timeout = setTimeout(() => ctrl.abort(), 10000);
     let resp;
     try {
       resp = await fetch(ENDPOINT, {
@@ -274,10 +272,6 @@ const Jev = (() => {
 
   async function chooseMove(moves) {
     const res = await query(moves);
-    if (res.confidence < CONFIDENCE_FLOOR) {
-      addLog({ t: Date.now(), ok: false, reason: 'low_conf', choice: res.choice, confidence: res.confidence, state: res.state, probabilities: res.probabilities });
-      throw new Error('low confidence ' + res.confidence.toFixed(2));
-    }
     // Play Jev's best option: the highest-probability legal move. No
     // temperature sampling — Jev plays optimally, not for variety.
     let picked = res.choice;
@@ -313,8 +307,7 @@ window.jevClear = () => Jev.clearLog();
 
 // Local greedy AI — capture if possible, else save own weak groups /
 // attack weak enemy groups, with slight preference for the center.
-// Serves as the fallback when Jev is unavailable, and drives Black in
-// autoplay mode.
+// Drives Black in autoplay mode (against Jev's White).
 function heuristicPick(moves, color) {
   if (!moves || !moves.length) return { pass: true };
   const opp = color === BLACK ? WHITE : BLACK;
@@ -341,17 +334,11 @@ function heuristicPick(moves, color) {
 
 const AUTO_DELAY = 700; // pause between autoplay moves
 
-// Player labels. When the two heuristic AIs play each other (autoplay with
-// Jev unavailable) they are numbered: Local AI 1 (Black) vs Local AI 2 (White).
-// Player labels, always consistent within one context. In autoplay, when
-// White is not driven by Jev, both sides are the same heuristic and are
-// numbered: Local AI 1 (Black) vs Local AI 2 (White). whiteIsJevNow is
-// whether White is Jev in this context: Jev.isEnabled() for the upcoming
-// move, whiteIsJev for the move just played.
-function labels(whiteIsJevNow) {
-  if (!autoplay) return { black: 'You', white: whiteIsJevNow ? 'Jev' : 'Local AI' };
-  if (whiteIsJevNow) return { black: 'Local AI', white: 'Jev' };
-  return { black: 'Local AI 1', white: 'Local AI 2' };
+// Player labels. White is always Jev — no fallback to the local heuristic.
+// In autoplay the local heuristic drives Black against Jev's White.
+function labels() {
+  if (!autoplay) return { black: 'You', white: 'Jev' };
+  return { black: 'Local AI', white: 'Jev' };
 }
 
 function applyMove(m, color) {
@@ -364,10 +351,10 @@ function applyMove(m, color) {
   turn = color === BLACK ? WHITE : BLACK;
   draw();
   if (color === BLACK) {
-    setStatus(labels(Jev.isEnabled()).white + ' (White) is thinking...');
+    setStatus(labels().white + ' (White) is thinking...');
     setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
-    const L = labels(whiteIsJev);
+    const L = labels();
     setStatus(L.white + ' (White) played. ' + L.black + ' (Black) is thinking...');
     setTimeout(blackAutoMove, AUTO_DELAY);
   } else {
@@ -385,29 +372,42 @@ function blackAutoMove() {
   applyMove(pick.move, BLACK);
 }
 
-function fallbackToHeuristic(moves, reason) {
-  if (reason) Jev.logEntry({ t: Date.now(), ok: false, reason: String(reason), choice: null, confidence: null, state: null, probabilities: null });
-  setHud(false);
-  const pick = heuristicPick(moves, WHITE);
-  if (pick.pass) { jevLastChoice = null; doPass(WHITE); }
-  else { jevLastChoice = Jev.coordName(pick.move.x, pick.move.y); applyMove(pick.move, WHITE); }
-}
-
-// White's turn: ask Jev for the move, fall back to the local heuristic.
-function jevMove() {
+// White's turn: Jev plays. No fallback to the local heuristic.
+function jevMove(retries) {
   if (gameOver) return;
+  if (retries === undefined) retries = 0;
   const moves = legalMoves(board, WHITE, lastMove);
   if (!moves.length) { doPass(WHITE); return; }
-  if (!Jev.isEnabled()) { fallbackToHeuristic(moves, null); return; }
+  if (!Jev.isEnabled()) {
+    setHud(false);
+    setStatus('Jev API key required — press J to enter a key.');
+    return;
+  }
   setHud(true);
-  setStatus(labels(Jev.isEnabled()).white + ' (White) is thinking...');
+  setStatus(labels().white + ' (White) is thinking...');
   Jev.chooseMove(moves).then(sel => {
     if (gameOver) return;
     if (sel === 'pass') { doPass(WHITE); return; }
     const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
     if (m) applyMove(m, WHITE);
-    else fallbackToHeuristic(moves, 'Jev chose illegal point ' + sel);
-  }).catch(err => fallbackToHeuristic(moves, err && err.message ? err.message : err));
+    else if (retries < 3) {
+      Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel, choice: sel, confidence: null, state: null, probabilities: null });
+      setStatus('Jev returned an illegal move — retrying...');
+      setTimeout(() => jevMove(retries + 1), 1000);
+    } else {
+      Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel + ' after ' + retries + ' retries', choice: sel, confidence: null, state: null, probabilities: null });
+      setStatus('Jev error — illegal move. Press J to check your API key.');
+    }
+  }).catch(err => {
+    const reason = err && err.message ? err.message : String(err);
+    Jev.logEntry({ t: Date.now(), ok: false, reason, choice: null, confidence: null, state: null, probabilities: null });
+    if (retries < 3) {
+      setStatus('Jev error (' + reason + ') — retrying...');
+      setTimeout(() => jevMove(retries + 1), 1000);
+    } else {
+      setStatus('Jev error after ' + (retries + 1) + ' attempts: ' + reason + '. Press J to check your API key.');
+    }
+  });
 }
 
 function doPass(color) {
@@ -420,13 +420,13 @@ function doPass(color) {
   if (color === WHITE) {
     turn = BLACK;
     draw();
-    const L = labels(whiteIsJev);
+    const L = labels();
     if (autoplay) { setStatus(L.white + ' (White) passed. ' + L.black + ' (Black) is thinking...'); setTimeout(blackAutoMove, AUTO_DELAY); }
     else setStatus(L.white + ' (White) passed. Your move — pass again to end.');
   } else {
     turn = WHITE;
     draw();
-    const L = labels(Jev.isEnabled());
+    const L = labels();
     if (autoplay) { setStatus(L.black + ' (Black) passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
     else { setStatus('You passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, 350); }
   }
@@ -467,7 +467,7 @@ function endGame() {
       if (board[y][x] === WHITE) stonesW++;
     }
   const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5; // komi
-  const L = labels(whiteIsJev);
+  const L = labels();
   let msg;
   if (scoreB > scoreW) msg = autoplay ? 'Game over — ' + L.black + ' (Black) wins, ' + scoreB + ' to ' + scoreW + '.' : 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
   else if (scoreW > scoreB) msg = 'Game over — ' + L.white + ' (White) wins, ' + scoreW + ' to ' + scoreB + '.';
@@ -540,7 +540,7 @@ function draw(territory) {
 }
 
 function updateScoreLine() {
-  const L = labels(whiteIsJev);
+  const L = labels();
   document.getElementById('score').textContent =
     'Captures — \u25CF ' + L.black + ' (Black): ' + captures[BLACK] +
     '   \u25CB ' + L.white + ' (White): ' + captures[WHITE];
@@ -557,7 +557,6 @@ document.getElementById('undoBtn').addEventListener('click', undo);
 document.getElementById('newBtn').addEventListener('click', newGame);
 
 let autoplay = false;
-let whiteIsJev = false;
 function toggleAutoplay() {
   autoplay = !autoplay;
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
@@ -565,26 +564,25 @@ function toggleAutoplay() {
   refreshHud();
   if (autoplay) {
     if (gameOver) newGame();
-    const L = labels(Jev.isEnabled());
+    const L = labels();
     setStatus('Autoplay: ' + L.black + ' (Black) vs ' + L.white + ' (White).');
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
-    setStatus(turn === BLACK ? 'Your move — you are Black.' : labels(Jev.isEnabled()).white + ' (White) is thinking...');
+    setStatus(turn === BLACK ? 'Your move — you are Black.' : labels().white + ' (White) is thinking...');
   }
 }
 
-function setHud(jev) {
-  whiteIsJev = jev;
+function setHud(enabled) {
   const el = document.getElementById('jevhud');
-  el.textContent = 'WHITE: ' + labels(jev).white.toUpperCase();
-  el.style.color = jev ? '#4caf50' : '#e53935';
+  el.textContent = 'WHITE: ' + (enabled ? 'JEV' : 'JEV (NO KEY)');
+  el.style.color = enabled ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
 }
 
 function updateMatchup() {
-  const L = labels(whiteIsJev);
+  const L = labels();
   document.getElementById('matchup').textContent =
     '\u25CF ' + L.black + ' (Black)  vs  \u25CB ' + L.white + ' (White)';
 }
