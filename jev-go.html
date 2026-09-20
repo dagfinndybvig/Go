@@ -316,6 +316,7 @@ window.jevClear = () => Jev.clearLog();
 // Serves as the fallback when Jev is unavailable, and drives Black in
 // autoplay mode.
 function heuristicPick(moves, color) {
+  if (!moves || !moves.length) return { pass: true };
   const opp = color === BLACK ? WHITE : BLACK;
   let best = null, bestScore = -Infinity;
   for (const m of moves) {
