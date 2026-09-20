@@ -4,6 +4,9 @@ A small 9x9 Go game where the White stones are played by
 [Jev](https://www.typesafe.ai), TypeSafe AI's "System One" decision model.
 You play Black against either Jev or a built-in local heuristic AI.
 
+A short recap of the rules of Go, with links for learning more, is in
+[GO_RULES.md](GO_RULES.md).
+
 ## Rules
 
 Full Go rules on a 9x9 board: captures, suicide prevention, and simple ko.
