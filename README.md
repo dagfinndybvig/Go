@@ -1,3 +1,5 @@
+<img width="790" height="764" alt="go" src="https://github.com/user-attachments/assets/135e689e-840d-4afd-97c7-015f69b51834" />
+
 # Jev Go
 
 A small 9x9 Go game where the White stones are played by
