@@ -27,7 +27,7 @@ the rules.
 
 - [Sensei's Library](https://senseis.xmp.net/) — the standard Go wiki;
   rules, terminology, and strategy at every level.
-- [Online-Go.com learn section](https://online-go.com/learn) — free
-  interactive tutorials and a way to play against people of any strength.
+- [Online-Go.com](https://online-go.com/) — play against people of any
+  strength (account needed to play, not to browse).
 - ["The Interactive Way To Go"](https://playgo.to/iwtg/en/) — a classic
   step-by-step interactive tutorial for complete beginners.
