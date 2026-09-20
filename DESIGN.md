@@ -268,10 +268,11 @@ but both players are the same heuristic.
   (Black) vs Local AI (White)`. It updates whenever the mode changes or
   White's driver changes (e.g. a fallback mid-game).
 - **Controls row**: Pass, Undo, New game, plus buttons for the mode
-  options — `Autoplay: off/on (0)`, `Jev key (J)`, `Jev log (L)`. Every
+  options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
 - **Player combinations panel** (under the score, bordered): the three
-  possible matchups and the keys/buttons that switch them.
+  possible matchups — noting that Jev needs an API key and the local AI
+  does not — and the keys/buttons that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, and the game result with both scores.
 - **Score line**: captures for both sides, labeled "you (Black)" or
