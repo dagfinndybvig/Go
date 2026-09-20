@@ -80,7 +80,7 @@ The HUD shows who is playing at all times:
 
 - **green WHITE: JEV** — Jev is active and choosing White's moves
 - **red WHITE: LOCAL AI** — fallback to the built-in heuristic (no key,
-  network error, timeout, confidence below 0.3, or an illegal choice)
+  network error, timeout, confidence below 0.1, or an illegal choice)
 
 ### Starting, stopping, restarting the server
 
@@ -140,7 +140,7 @@ On each White turn:
    generation — one typed round trip per turn.
 4. **Pick** — the game plays the highest-probability legal option from
    the distribution: Jev's best move, with no randomness.
-5. **Fallback** — on timeout (3s), error, low confidence (< 0.3), or an
+5. **Fallback** — on timeout (3s), error, low confidence (< 0.1), or an
    illegal pick, White switches to the built-in heuristic AI.
 
 ```

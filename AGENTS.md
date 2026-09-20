@@ -100,6 +100,6 @@ There is no test framework. Tests are throwaway Node scripts using
   `whiteIsJev`. Status texts must name the actual driver
   (`Jev.isEnabled()` for the *upcoming* move, `whiteIsJev` for the move
   just played), never hardcode "Jev".
-- The fallback chain (no key, timeout 3s, HTTP error, confidence < 0.3,
+- The fallback chain (no key, timeout 3s, HTTP error, confidence < 0.1,
   illegal choice) must always land on `heuristicPick` — the game must
   never stall or crash when Jev is unreachable.
