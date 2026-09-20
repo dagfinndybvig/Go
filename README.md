@@ -21,6 +21,7 @@ game end.
 | New game | New game button |
 | Set Jev API key | `J` |
 | Toggle Jev log panel | `L` |
+| Toggle autoplay (Jev vs local AI) | `0` |
 
 ## Running
 
@@ -87,6 +88,20 @@ board state → text → POST /jev → choice + probabilities + confidence
 Press **L** in-game to watch the decisions live. In the browser console,
 `window.jevLog()` returns the last 200 decisions and `window.jevClear()`
 empties the log.
+
+## Autoplay mode
+
+Press **0** to toggle autoplay: Jev (White) plays against the local
+heuristic AI (Black), with no human input. Each side moves on a ~700ms
+cadence, and when the game ends the result is shown for a few seconds
+before a new game starts automatically. The score line and game-over
+message name the local AI instead of "you", so you can watch the two
+approaches compete — Jev's sampled decisions against the greedy
+heuristic's captures-and-liberties play.
+
+Toggling autoplay off mid-game returns control: you play Black from
+whatever position the board is in. Pass and Undo are disabled while
+autoplay runs.
 
 ## Architecture
 
