@@ -1,0 +1,527 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<title>Jev Go — 9x9</title>
+<style>
+  body { background: #2b2b2b; color: #eee; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
+  h1 { font-weight: normal; margin: 0 0 4px; }
+  #status { min-height: 24px; margin: 8px 0; font-size: 18px; }
+  canvas { background: #dcb35c; border-radius: 4px; cursor: pointer; box-shadow: 0 4px 16px rgba(0,0,0,.5); }
+  #controls { margin-top: 12px; }
+  button { background: #444; color: #eee; border: 1px solid #666; padding: 6px 16px; margin: 0 4px; font-size: 15px; border-radius: 4px; cursor: pointer; }
+  button:hover { background: #555; }
+  #score { margin-top: 10px; font-size: 15px; color: #bbb; }
+  #jevhud { position: fixed; right: 16px; bottom: 12px; font-size: 13px; letter-spacing: 1px; font-family: monospace; }
+  #jevlog { display: none; position: fixed; left: 16px; bottom: 12px; background: rgba(0,0,0,.85); color: #cfc; font: 12px monospace; padding: 10px; border-radius: 6px; max-width: 460px; max-height: 40vh; overflow-y: auto; white-space: pre-wrap; }
+</style>
+</head>
+<body>
+<h1>Jev Go</h1>
+<div id="status">Your move — you are Black.</div>
+<canvas id="board" width="468" height="468"></canvas>
+<div id="controls">
+  <button id="passBtn">Pass</button>
+  <button id="undoBtn">Undo</button>
+  <button id="newBtn">New game</button>
+</div>
+<div id="score"></div>
+<div id="jevhud"></div>
+<div id="jevlog"></div>
+
+<script>
+'use strict';
+const N = 9;                 // 9x9 board
+const EMPTY = 0, BLACK = 1, WHITE = 2;
+const MARGIN = 30, CELL = (468 - 2 * MARGIN) / (N - 1);
+
+let board, turn, captures, history, lastMove, lastCoord, jevLastChoice, passes, gameOver;
+
+function newGame() {
+  board = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
+  turn = BLACK;
+  captures = { 1: 0, 2: 0 };
+  history = [];
+  lastMove = null;
+  lastCoord = null;
+  jevLastChoice = null;
+  passes = 0;
+  gameOver = false;
+  setStatus('Your move — you are Black.');
+  draw();
+}
+
+function neighbors(x, y) {
+  const out = [];
+  if (x > 0) out.push([x - 1, y]);
+  if (x < N - 1) out.push([x + 1, y]);
+  if (y > 0) out.push([x, y - 1]);
+  if (y < N - 1) out.push([x, y + 1]);
+  return out;
+}
+
+// Return the group containing (x,y) and its liberty count.
+function groupAndLiberties(bd, x, y) {
+  const color = bd[y][x];
+  const seen = new Set(), group = [], stack = [[x, y]];
+  seen.add(x + ',' + y);
+  let libs = 0;
+  const libSeen = new Set();
+  while (stack.length) {
+    const [cx, cy] = stack.pop();
+    group.push([cx, cy]);
+    for (const [nx, ny] of neighbors(cx, cy)) {
+      const v = bd[ny][nx];
+      if (v === EMPTY) {
+        const k = nx + ',' + ny;
+        if (!libSeen.has(k)) { libSeen.add(k); libs++; }
+      } else if (v === color && !seen.has(nx + ',' + ny)) {
+        seen.add(nx + ',' + ny);
+        stack.push([nx, ny]);
+      }
+    }
+  }
+  return { group, libs };
+}
+
+// Try placing color at (x,y) on a copy of bd. Returns {legal, board, captured}
+function tryMove(bd, x, y, color) {
+  if (bd[y][x] !== EMPTY) return { legal: false };
+  const nb = bd.map(r => r.slice());
+  nb[y][x] = color;
+  const opp = color === BLACK ? WHITE : BLACK;
+  let captured = 0;
+  for (const [nx, ny] of neighbors(x, y)) {
+    if (nb[ny][nx] === opp) {
+      const g = groupAndLiberties(nb, nx, ny);
+      if (g.libs === 0) {
+        for (const [gx, gy] of g.group) { nb[gy][gx] = EMPTY; captured++; }
+      }
+    }
+  }
+  const own = groupAndLiberties(nb, x, y);
+  if (own.libs === 0) return { legal: false }; // suicide
+  return { legal: true, board: nb, captured };
+}
+
+function isKo(prevBoard, nextBoard) {
+  if (!prevBoard) return false;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++)
+      if (prevBoard[y][x] !== nextBoard[y][x]) return false;
+  return true;
+}
+
+function humanPlay(x, y) {
+  if (gameOver || turn !== BLACK) return;
+  const prev = board;
+  const r = tryMove(board, x, y, BLACK);
+  if (!r.legal) { setStatus('Illegal move.'); return; }
+  if (isKo(lastMove, r.board)) { setStatus('Illegal: ko.'); return; }
+  history.push({ board, captures: { ...captures }, lastMove, passes });
+  board = r.board;
+  captures[BLACK] += r.captured;
+  lastMove = r.board;
+  lastCoord = { x, y };
+  passes = 0;
+  turn = WHITE;
+  draw();
+  setStatus('Jev is thinking...');
+  setTimeout(jevMove, 350);
+}
+
+function legalMoves(bd, color, koBoard) {
+  const moves = [];
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const r = tryMove(bd, x, y, color);
+      if (r.legal && !isKo(koBoard, r.board)) moves.push({ x, y, captured: r.captured, board: r.board });
+    }
+  return moves;
+}
+
+// ---- Jev AI (TypeSafe System One) ----
+// When a TypeSafe API key is available (browser key entered with J, or the
+// server's TYPESAFE_API_KEY injected by server.js), White's moves are chosen
+// by the Jev decision model. Falls back to the local heuristic on error,
+// timeout, or low confidence.
+const Jev = (() => {
+  const ENDPOINT = location.protocol.startsWith('http')
+    ? '/jev'
+    : 'https://api.typesafe.ai/v1/systemone';
+  const MODEL = 'jev-latest';
+  const CONFIDENCE_FLOOR = 0.3;
+  const COLS = 'ABCDEFGHJ';
+  const LOG_MAX = 200;
+  const log = [];
+
+  let apiKey = '';
+  try { apiKey = localStorage.getItem('typesafe_api_key') || ''; } catch (e) {}
+  let serverKey = false;
+  if (location.protocol.startsWith('http')) {
+    fetch('/jevstatus').then(r => r.json())
+      .then(d => { serverKey = !!d.serverKey; refreshHud(); })
+      .catch(() => {});
+  }
+
+  function coordName(x, y) { return COLS[x] + (y + 1); }
+
+  function addLog(entry) {
+    log.push(entry);
+    if (log.length > LOG_MAX) log.shift();
+  }
+
+  function describeMove(m) {
+    const bits = [];
+    if (m.captured > 0) bits.push('captures ' + m.captured + (m.captured === 1 ? ' stone' : ' stones'));
+    let atari = false;
+    for (const [nx, ny] of neighbors(m.x, m.y)) {
+      if (m.board[ny][nx] === BLACK) {
+        const g = groupAndLiberties(m.board, nx, ny);
+        if (g.libs === 1) atari = true;
+      }
+    }
+    if (atari) bits.push('puts an opponent group in atari');
+    if (groupAndLiberties(m.board, m.x, m.y).libs === 1) bits.push('self-atari risk');
+    if (!bits.length) {
+      const edge = m.x === 0 || m.x === N - 1 || m.y === 0 || m.y === N - 1;
+      bits.push(edge ? 'edge point' : 'open point');
+    }
+    return coordName(m.x, m.y) + ' — ' + bits.join(', ');
+  }
+
+  function boardText() {
+    const lines = [];
+    for (let y = N - 1; y >= 0; y--) {
+      let row = (y + 1) + ' ';
+      for (let x = 0; x < N; x++) {
+        row += board[y][x] === BLACK ? 'O' : board[y][x] === WHITE ? 'X' : '.';
+        if (x < N - 1) row += ' ';
+      }
+      lines.push(row);
+    }
+    lines.push('  ' + COLS.split('').join(' '));
+    return lines.join('\n');
+  }
+
+  function buildState(moves) {
+    return [
+      'Game of Go on a 9x9 board. You are White (X); your opponent is Black (O). You receive komi 5.5.',
+      'Area scoring: at game end each side scores its stones on the board plus empty regions it surrounds alone. Two consecutive passes end the game.',
+      'Captures so far: you ' + captures[WHITE] + ', opponent ' + captures[BLACK] + '.',
+      'Current board (rows 9 at top down to 1, columns A-J):',
+      boardText(),
+      "Opponent's last move: " + (lastCoord ? coordName(lastCoord.x, lastCoord.y) : 'none (start of game or a pass)'),
+      'Your previous move: ' + (jevLastChoice || 'none yet'),
+      'There are ' + moves.length + ' legal moves, listed in the criteria. Choose the strongest point for White.',
+    ].join('\n');
+  }
+
+  async function query(moves) {
+    const criteria = {};
+    for (const m of moves) criteria[coordName(m.x, m.y)] = describeMove(m);
+    criteria.pass = 'skip your turn; if both players pass in a row the game ends and the position is scored';
+    const stateStr = buildState(moves);
+    const body = {
+      model: MODEL,
+      state: stateStr,
+      questions: {
+        move: {
+          type: 'choice',
+          instructions: 'Which point should White play next? Pick the move with the best balance of captures, atari, territory and group safety.',
+          criteria,
+        },
+      },
+    };
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 3000);
+    let resp;
+    try {
+      resp = await fetch(ENDPOINT, {
+        method: 'POST',
+        headers: {
+          ...(apiKey ? { 'Authorization': 'Bearer ' + apiKey } : {}),
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(body),
+        signal: ctrl.signal,
+      });
+    } catch (e) {
+      throw new Error(e.name === 'AbortError' ? 'timeout' : 'network');
+    } finally {
+      clearTimeout(timeout);
+    }
+    if (!resp.ok) throw new Error('HTTP ' + resp.status);
+    const data = await resp.json();
+    const ans = data.answers && data.answers.move;
+    if (!ans || !ans.choice) throw new Error('no choice in response');
+    return { choice: ans.choice, confidence: ans.confidence || 0, probabilities: ans.probabilities || null, state: stateStr };
+  }
+
+  async function chooseMove(moves) {
+    const res = await query(moves);
+    if (res.confidence < CONFIDENCE_FLOOR) {
+      addLog({ t: Date.now(), ok: false, reason: 'low_conf', choice: res.choice, confidence: res.confidence, state: res.state, probabilities: res.probabilities });
+      throw new Error('low confidence ' + res.confidence.toFixed(2));
+    }
+    let picked = res.choice;
+    if (res.probabilities) {
+      const temp = 1.6 + Math.random() * 0.8;
+      const legal = new Set(moves.map(m => coordName(m.x, m.y)));
+      legal.add('pass');
+      const entries = Object.entries(res.probabilities)
+        .filter(([k]) => legal.has(k) && k !== jevLastChoice);
+      if (entries.length) {
+        const weights = entries.map(([, v]) => Math.pow(v, 1 / temp));
+        const sum = weights.reduce((a, b) => a + b, 0);
+        let r = Math.random() * sum;
+        for (let i = 0; i < entries.length; i++) {
+          r -= weights[i];
+          if (r <= 0) { picked = entries[i][0]; break; }
+        }
+      }
+    }
+    jevLastChoice = picked === 'pass' ? null : picked;
+    addLog({ t: Date.now(), ok: true, choice: picked, jevChoice: res.choice, confidence: res.confidence, state: res.state, probabilities: res.probabilities });
+    return picked;
+  }
+
+  return {
+    chooseMove,
+    coordName,
+    isEnabled() { return !!(apiKey || serverKey); },
+    logEntry(entry) { addLog(entry); },
+    getLog() { return log.slice(); },
+    clearLog() { log.length = 0; },
+    setKey(key) {
+      apiKey = key || '';
+      try { localStorage.setItem('typesafe_api_key', apiKey); } catch (e) {}
+    },
+    getKey() { return apiKey; },
+  };
+})();
+window.jevLog = () => Jev.getLog();
+window.jevClear = () => Jev.clearLog();
+
+// Jev: greedy AI — capture if possible, else save own weak groups /
+// attack weak enemy groups, with slight preference for the center.
+// Serves as the fallback when Jev is unavailable.
+function heuristicPick(moves) {
+  let best = null, bestScore = -Infinity;
+  for (const m of moves) {
+    let s = m.captured * 100;
+    // After White's move, how do Black groups look?
+    const blackMoves = legalMoves(m.board, BLACK, m.board);
+    let blackBestCapture = 0;
+    for (const bm of blackMoves) blackBestCapture = Math.max(blackBestCapture, bm.captured);
+    s -= blackBestCapture * 80;
+    // Liberty pressure: count White liberties gained vs Black liberties nearby
+    const g = groupAndLiberties(m.board, m.x, m.y);
+    s += g.libs * 4;
+    s -= Math.abs(m.x - 4) + Math.abs(m.y - 4); // mild center bias
+    s += Math.random() * 2; // tie-break variety
+    if (s > bestScore) { bestScore = s; best = m; }
+  }
+
+  // Pass when only hopeless moves remain and nothing is being captured
+  if (best.captured === 0 && bestScore < -40) return { pass: true };
+  return { move: best };
+}
+
+function applyWhite(m) {
+  history.push({ board, captures: { ...captures }, lastMove, passes });
+  board = m.board;
+  captures[WHITE] += m.captured;
+  lastMove = m.board;
+  lastCoord = { x: m.x, y: m.y };
+  passes = 0;
+  turn = BLACK;
+  draw();
+  setStatus('Your move.');
+}
+
+function fallbackToHeuristic(moves, reason) {
+  if (reason) Jev.logEntry({ t: Date.now(), ok: false, reason: String(reason), choice: null, confidence: null, state: null, probabilities: null });
+  setHud(false);
+  const pick = heuristicPick(moves);
+  if (pick.pass) doPass(true);
+  else applyWhite(pick.move);
+}
+
+// White's turn: ask Jev for the move, fall back to the local heuristic.
+function jevMove() {
+  if (gameOver) return;
+  const moves = legalMoves(board, WHITE, lastMove);
+  if (!moves.length) { doPass(true); return; }
+  if (!Jev.isEnabled()) { fallbackToHeuristic(moves, null); return; }
+  setHud(true);
+  setStatus('Jev is thinking...');
+  Jev.chooseMove(moves).then(sel => {
+    if (gameOver) return;
+    if (sel === 'pass') { doPass(true); return; }
+    const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
+    if (m) applyWhite(m);
+    else fallbackToHeuristic(moves, 'Jev chose illegal point ' + sel);
+  }).catch(err => fallbackToHeuristic(moves, err && err.message ? err.message : err));
+}
+
+function doPass(byJev) {
+  if (gameOver) return;
+  history.push({ board, captures: { ...captures }, lastMove, passes });
+  passes++;
+  lastMove = null;
+  lastCoord = null;
+  if (passes >= 2) { endGame(); return; }
+  if (byJev) { turn = BLACK; draw(); setStatus('Jev passed. Your move — pass again to end.'); }
+  else { turn = WHITE; draw(); setStatus('You passed. Jev is thinking...'); setTimeout(jevMove, 350); }
+}
+
+function endGame() {
+  gameOver = true;
+  // Area scoring: stones on board + empty regions touching only one color.
+  const owner = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
+  const seen = new Set();
+  let terrB = 0, terrW = 0;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      if (board[y][x] !== EMPTY || seen.has(x + ',' + y)) continue;
+      const region = [], stack = [[x, y]];
+      seen.add(x + ',' + y);
+      const touch = new Set();
+      while (stack.length) {
+        const [cx, cy] = stack.pop();
+        region.push([cx, cy]);
+        for (const [nx, ny] of neighbors(cx, cy)) {
+          const v = board[ny][nx];
+          if (v === EMPTY) {
+            if (!seen.has(nx + ',' + ny)) { seen.add(nx + ',' + ny); stack.push([nx, ny]); }
+          } else touch.add(v);
+        }
+      }
+      if (touch.size === 1) {
+        const c = [...touch][0];
+        for (const [rx, ry] of region) owner[ry][rx] = c;
+        if (c === BLACK) terrB += region.length; else terrW += region.length;
+      }
+    }
+  let stonesB = 0, stonesW = 0;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      if (board[y][x] === BLACK) stonesB++;
+      if (board[y][x] === WHITE) stonesW++;
+    }
+  const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5; // komi
+  let msg;
+  if (scoreB > scoreW) msg = 'Game over — you win, ' + scoreB + ' to ' + scoreW + '.';
+  else if (scoreW > scoreB) msg = 'Game over — Jev wins, ' + scoreW + ' to ' + scoreB + '.';
+  else msg = 'Game over — draw.';
+  setStatus(msg + ' (komi 5.5 for White)');
+  draw(owner);
+}
+
+function undo() {
+  if (!history.length || gameOver) return;
+  const h = history.pop();
+  board = h.board;
+  captures = h.captures;
+  lastMove = h.lastMove;
+  lastCoord = null;
+  passes = h.passes;
+  turn = BLACK; // undo returns to the human's turn
+  gameOver = false;
+  setStatus('Your move — you are Black.');
+  draw();
+}
+
+function setStatus(t) { document.getElementById('status').textContent = t; }
+
+function draw(territory) {
+  const ctx = document.getElementById('board').getContext('2d');
+  ctx.clearRect(0, 0, 468, 468);
+  ctx.strokeStyle = '#5a3d1e';
+  ctx.lineWidth = 1;
+  for (let i = 0; i < N; i++) {
+    ctx.beginPath();
+    ctx.moveTo(MARGIN, MARGIN + i * CELL); ctx.lineTo(MARGIN + (N - 1) * CELL, MARGIN + i * CELL);
+    ctx.stroke();
+    ctx.beginPath();
+    ctx.moveTo(MARGIN + i * CELL, MARGIN); ctx.lineTo(MARGIN + i * CELL, MARGIN + (N - 1) * CELL);
+    ctx.stroke();
+  }
+  // star points (hoshi) for 9x9
+  for (const [sx, sy] of [[2,2],[6,2],[4,4],[2,6],[6,6]]) {
+    ctx.beginPath();
+    ctx.arc(MARGIN + sx * CELL, MARGIN + sy * CELL, 3, 0, Math.PI * 2);
+    ctx.fillStyle = '#5a3d1e';
+    ctx.fill();
+  }
+  const R = CELL * 0.46;
+  for (let y = 0; y < N; y++)
+    for (let x = 0; x < N; x++) {
+      const v = board[y][x];
+      const px = MARGIN + x * CELL, py = MARGIN + y * CELL;
+      if (v !== EMPTY) {
+        ctx.beginPath();
+        ctx.arc(px, py, R, 0, Math.PI * 2);
+        ctx.fillStyle = v === BLACK ? '#111' : '#f5f5f5';
+        ctx.fill();
+        ctx.strokeStyle = v === BLACK ? '#000' : '#999';
+        ctx.stroke();
+      } else if (territory && territory[y][x] !== EMPTY) {
+        ctx.beginPath();
+        ctx.arc(px, py, 5, 0, Math.PI * 2);
+        ctx.fillStyle = territory[y][x] === BLACK ? '#111' : '#f5f5f5';
+        ctx.fill();
+      }
+    }
+  document.getElementById('score').textContent =
+    'Captures — you (Black): ' + captures[BLACK] + '   Jev (White): ' + captures[WHITE];
+}
+
+document.getElementById('board').addEventListener('click', e => {
+  const rect = e.target.getBoundingClientRect();
+  const x = Math.round((e.clientX - rect.left - MARGIN) / CELL);
+  const y = Math.round((e.clientY - rect.top - MARGIN) / CELL);
+  if (x >= 0 && x < N && y >= 0 && y < N) humanPlay(x, y);
+});
+document.getElementById('passBtn').addEventListener('click', () => doPass(false));
+document.getElementById('undoBtn').addEventListener('click', undo);
+document.getElementById('newBtn').addEventListener('click', newGame);
+
+function setHud(jev) {
+  const el = document.getElementById('jevhud');
+  el.textContent = jev ? 'JEV' : 'LOCAL AI';
+  el.style.color = jev ? '#4caf50' : '#e53935';
+}
+function refreshHud() { setHud(Jev.isEnabled()); }
+
+function renderJevLog() {
+  const panel = document.getElementById('jevlog');
+  const entries = Jev.getLog().slice(-10).reverse();
+  panel.textContent = entries.map(e =>
+    new Date(e.t).toLocaleTimeString() + '  ' +
+    (e.ok
+      ? 'play ' + e.choice + '  conf ' + e.confidence.toFixed(2) + (e.jevChoice !== e.choice ? '  (jev: ' + e.jevChoice + ')' : '')
+      : 'fallback: ' + e.reason)
+  ).join('\n') || 'No Jev decisions yet.';
+}
+
+document.addEventListener('keydown', e => {
+  const k = e.key.toLowerCase();
+  if (k === 'j') {
+    const key = prompt('Enter TypeSafe API key (leave empty to disable Jev and use the local AI):', Jev.getKey() || '');
+    if (key !== null) Jev.setKey(key.trim());
+    refreshHud();
+  } else if (k === 'l') {
+    const panel = document.getElementById('jevlog');
+    const show = panel.style.display !== 'block';
+    panel.style.display = show ? 'block' : 'none';
+    if (show) renderJevLog();
+  }
+});
+
+newGame();
+refreshHud();
+</script>
+</body>
+</html>
