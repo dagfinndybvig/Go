@@ -9,6 +9,11 @@ You play Black against either Jev or a built-in local heuristic AI.
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 
+The game is also served from GitHub Pages:
+**https://dagfinndybvig.github.io/Go/** — there (and when opening
+`jev-go.html` directly) it runs with the local heuristic AI only, since
+Jev needs the local proxy server and an API key (see Running below).
+
 ## Rules
 
 Full Go rules on a 9x9 board: captures, suicide prevention, and simple ko.
@@ -27,6 +32,9 @@ game end.
 | Set Jev API key | `J` |
 | Toggle Jev log panel | `L` |
 | Toggle autoplay (Jev vs local AI) | `0` |
+
+All of these are also visible as buttons above the board: **Autoplay:
+off/on (0)**, **API key (J)**, and **Jev log (L)**.
 
 ## Running
 
@@ -60,7 +68,13 @@ set TYPESAFE_API_KEY=yourkey && node server.js
 $env:TYPESAFE_API_KEY="yourkey"; node server.js
 ```
 
-The HUD in the bottom-right corner shows the AI status:
+The HUD shows who is playing at all times:
+
+- A yellow **matchup line** under the title, e.g. `You  vs  Jev` or
+  `Local AI  vs  Local AI`, naming the actual driver of each colour.
+- A bordered **player combinations** panel listing the possible
+  matchups and how to switch between them.
+- The indicator in the bottom-right corner:
 
 - **green JEV** — Jev is active and choosing White's moves
 - **red LOCAL AI** — fallback to the built-in heuristic (no key, network
@@ -140,7 +154,10 @@ empties the log.
 ## Autoplay mode
 
 Press **0** to toggle autoplay: Jev (White) plays against the local
-heuristic AI (Black), with no human input. Each side moves on a ~700ms
+heuristic AI (Black), with no human input. Note that on Pages or when
+opening the file directly (no server), autoplay is heuristic vs
+heuristic, since Jev is only reachable through the local proxy. Each
+side moves on a ~700ms
 cadence, and when the game ends the result is shown for a few seconds
 before a new game starts automatically. The score line and game-over
 message name the local AI instead of "you", so you can watch the two
@@ -156,6 +173,7 @@ autoplay runs.
 ```
 jev-go.html   — entire game (single file, no dependencies)
 server.js     — local Node.js server + Jev CORS proxy (run: node server.js)
+index.html    — redirect to jev-go.html, so GitHub Pages serves the game
 ```
 
 The game logic (groups, liberties, captures, ko, scoring) is pure
