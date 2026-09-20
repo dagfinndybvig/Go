@@ -498,9 +498,13 @@ function draw(territory) {
         ctx.fill();
       }
     }
+  updateScoreLine();
+}
+
+function updateScoreLine() {
   document.getElementById('score').textContent =
     'Captures — ' + (autoplay ? 'local AI (Black)' : 'you (Black)') + ': ' + captures[BLACK] +
-    '   Jev (White): ' + captures[WHITE];
+    '   ' + (whiteIsJev ? 'Jev' : 'Local AI') + ' (White): ' + captures[WHITE];
 }
 
 document.getElementById('board').addEventListener('click', e => {
@@ -514,6 +518,7 @@ document.getElementById('undoBtn').addEventListener('click', undo);
 document.getElementById('newBtn').addEventListener('click', newGame);
 
 let autoplay = false;
+let whiteIsJev = false;
 function toggleAutoplay() {
   autoplay = !autoplay;
   document.getElementById('autohud').style.display = autoplay ? 'block' : 'none';
@@ -528,9 +533,11 @@ function toggleAutoplay() {
 }
 
 function setHud(jev) {
+  whiteIsJev = jev;
   const el = document.getElementById('jevhud');
   el.textContent = jev ? 'JEV' : 'LOCAL AI';
   el.style.color = jev ? '#4caf50' : '#e53935';
+  updateScoreLine();
 }
 function refreshHud() { setHud(Jev.isEnabled()); }
 
