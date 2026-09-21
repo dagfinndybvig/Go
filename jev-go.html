@@ -41,7 +41,7 @@
 </div>
 <div id="score"></div>
 <div id="modes">
-  <b>Player combinations</b> — you vs <b>Jev</b> (an API key is needed) ·
+  <b>Player combinations</b> — you vs <b>Jev</b> (needs <code>node server.js</code> + API key) ·
   <b>local AI vs Jev</b> (autoplay)<br>
   Keys: <b>0</b> toggle autoplay · <b>J</b> enter API key (Jev needs it) · <b>L</b> Jev log ·
   or use the buttons above ·
@@ -450,6 +450,7 @@ const Jev = (() => {
     chooseMove,
     coordName,
     isEnabled() { return !!(apiKey || serverKey); },
+    isProxied() { return PROXY; },
     logEntry(entry) { addLog(entry); },
     getLog() { return log.slice(); },
     clearLog() { log.length = 0; },
@@ -538,7 +539,10 @@ function jevMove(retries) {
   if (!moves.length) { doPass(WHITE); return; }
   if (!Jev.isEnabled()) {
     setHud(false);
-    setStatus('Jev API key required — press J to enter a key.');
+    if (Jev.isProxied())
+      setStatus('Jev API key required — press J to enter a key.');
+    else
+      setStatus('Jev needs the local server (node server.js) and an API key. Press J to enter a key, or run the server and reload.');
     return;
   }
   setHud(true);
@@ -554,7 +558,7 @@ function jevMove(retries) {
       setTimeout(() => jevMove(retries + 1), 1000);
     } else {
       Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel + ' after ' + retries + ' retries', choice: sel, confidence: null, state: null, probabilities: null });
-      setStatus('Jev error — illegal move. Press J to check your API key.');
+      setStatus('Jev error — illegal move. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
     }
   }).catch(err => {
     const reason = err && err.message ? err.message : String(err);
@@ -563,7 +567,7 @@ function jevMove(retries) {
       setStatus('Jev error (' + reason + ') — retrying...');
       setTimeout(() => jevMove(retries + 1), 1000);
     } else {
-      setStatus('Jev error after ' + (retries + 1) + ' attempts: ' + reason + '. Press J to check your API key.');
+      setStatus('Jev error after ' + (retries + 1) + ' attempts: ' + reason + '. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
     }
   });
 }
