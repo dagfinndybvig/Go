@@ -108,12 +108,14 @@ There is no test framework. Tests are throwaway Node scripts using
 - `lastMove` holds a full board snapshot (for the ko check), not a
   coordinate. `lastCoord` is the display/state-text coordinate. Keep
   both updated in `applyMove` and `doPass`.
-- White is always Jev — no fallback to the local heuristic. The HUD
-  (`setHud`), score line, and matchup line always show "Jev" for White.
-  `labels()` takes no parameters. On error or timeout, `jevMove` retries
-  up to 3 times (10s timeout per attempt); if all retries fail it shows
-  an error message and does not play a move. The heuristic drives only
-  Black in autoplay mode.
+- White is Jev when an API key is available (browser key or server
+  key). Without a key, White falls back to the local heuristic — the
+  game keeps playing. There is no fallback on low confidence or errors:
+  `jevMove` retries up to 3 times (10s timeout per attempt); if all
+  retries fail it shows an error message and does not play a move. The
+  HUD (`setHud`), score line, and matchup line show "Jev" or "Local AI"
+  for White depending on `Jev.isEnabled()`. `labels()` takes no
+  parameters — it checks `Jev.isEnabled()` internally.
 - `filterMoves` reduces >30 legal moves to 30 candidates before
   querying Jev. `chooseMove` receives filtered moves; `buildState` and
   `describeMove` see the filtered set. The argmax in `chooseMove` only

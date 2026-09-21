@@ -6,12 +6,12 @@ decision model.
 
 ## Overview
 
-The player is Black; the machine is White. White is always driven by
-Jev — there is no fallback to the local heuristic. A built-in local
-heuristic drives Black in autoplay mode, so you can watch Jev's
-decisions against a greedy captures-and-liberties baseline. The local
-heuristic is deliberately kept simple — no sequence reading, no
-territory estimation — as a baseline for comparison.
+The player is Black; the machine is White. White is driven by Jev when
+an API key is available, with a local greedy heuristic as fallback when
+no key is set. The heuristic also drives Black in autoplay mode, so you
+can watch Jev's decisions against a greedy captures-and-liberties
+baseline. The local heuristic is deliberately kept simple — no sequence
+reading, no territory estimation — as a baseline for comparison.
 
 This design is inspired by, and follows the architecture of,
 [*Fight*](https://github.com/dagfinndybvig/Fight) — a one-on-one karate
@@ -20,8 +20,9 @@ Jev. The Jev integration pattern (local CORS proxy, state text, `Choice`
 question, argmax move selection) and the autoplay and log-panel concepts
 originate there; this repo adapts them to Go's turn-based flow. Unlike
 Fight, Jev plays its best move here (argmax over the distribution)
-rather than a temperature-sampled one, and there is no heuristic
-fallback — Jev always plays White.
+rather than a temperature-sampled one. There is no fallback on low
+confidence or errors — Jev retries instead. The only fallback is when
+no API key is set: the local heuristic plays White.
 
 ### Why Jev is weak at Go
 
@@ -307,19 +308,16 @@ gets the same move.
 
 #### Error handling
 
-There is no heuristic fallback. If Jev is unavailable:
+There is no fallback on low confidence or errors — Jev retries instead.
+The only fallback is when no API key is set:
 
-- No API key: the HUD shows "WHITE: JEV (NO KEY)" and the status line
-  says "Jev API key required — press J to enter a key." (on localhost) or
-  "Jev needs the local server (node server.js) and an API key. Press J
-  to enter a key, or run the server and reload." (on Pages/file://).
-  No move is played.
+- No API key: the HUD shows "WHITE: LOCAL AI" and White is played by
+  the local heuristic. The game continues — White does not stall. Press
+  `J` to enter a key and switch to Jev.
 - Timeout (10s) or network error: `jevMove` retries up to 3 times with
   1s between attempts. If all retries fail, an error message is shown
-  and the game waits — it does not substitute the heuristic. On
-  non-localhost, the message adds "or run node server.js locally."
-- Illegal choice: retried up to 3 times, then an error message is shown
-  with the same non-localhost hint.
+  and the game waits — it does not substitute the heuristic.
+- Illegal choice: retried up to 3 times, then an error message is shown.
 
 Every error is logged with its reason; every successful decision is
 logged with both Jev's original pick and the played pick.
@@ -331,14 +329,15 @@ the TypeSafe API does not send CORS headers:
 
 | How you open the game | Jev? | Why |
 | --- | --- | --- |
-| `file://` (double-click `jev-go.html`) | No — CORS blocks it | The game tries the API directly with your browser key, but browsers block cross-origin calls from `file://`. White does not move — there is no heuristic fallback. Run `node server.js` instead. |
+| `file://` (double-click `jev-go.html`) | No — CORS blocks it | The game tries the API directly with your browser key, but browsers block cross-origin calls from `file://`. Without a key, White is played by the local heuristic. Run `node server.js` to use Jev. |
 | `http://localhost:3000` (`node server.js`) | Yes, if a key exists | The proxy forwards `POST /jev` server-side. The server injects `TYPESAFE_API_KEY` from its environment; a browser key entered with `J` also works and takes precedence. |
-| Hosted (GitHub Pages) | No — CORS blocks it | The game tries the API directly with your browser key, but the API sends no CORS headers (`access-control-allow-origin: null`), so the browser blocks the call. White does not move — there is no heuristic fallback. Run `node server.js` locally to play against Jev. |
+| Hosted (GitHub Pages) | No — CORS blocks it | The game tries the API directly with your browser key, but the API sends no CORS headers (`access-control-allow-origin: null`), so the browser blocks the call. Without a key, White is played by the local heuristic. Run `node server.js` locally to use Jev. |
 
 The HUD in the bottom-right corner reflects this at all times:
 
 - **green `WHITE: JEV`** — Jev is enabled and choosing White's moves
-- **red `WHITE: JEV (NO KEY)`** — no API key set; White is waiting
+- **red `WHITE: LOCAL AI`** — no API key set; the local heuristic is
+  playing White
 
 `GET /jevstatus` reports `{ serverKey: true/false }`; the game polls it
 once at startup to enable Jev without a browser key.
@@ -362,9 +361,10 @@ input:
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
 - The score line and game-over message name the AIs instead of "you":
-  **Local AI** (Black) vs **Jev** (White). Labels are computed by one
-  `labels()` function (no parameters — White is always Jev) so the
-  pair is always consistent.
+  **Local AI** (Black) vs **Jev** (White), or **Local AI** vs **Local
+  AI** when no key is set. Labels are computed by one `labels()`
+  function (no parameters — White is Jev when a key exists, otherwise
+  Local AI) so the pair is always consistent.
 - Pass and Undo are disabled; clicks are ignored.
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
@@ -377,8 +377,8 @@ subtle part:
 | Hosting | Autoplay is |
 | --- | --- |
 | `localhost:3000` with a key | Jev vs local heuristic — the real comparison |
-| `localhost:3000` without a key | Jev vs local heuristic, but White stalls (no key) |
-| GitHub Pages or `file://` | Same — CORS blocks the API even with a browser key |
+| `localhost:3000` without a key | local AI vs local AI (White falls back) |
+| GitHub Pages or `file://` | Same — local AI vs local AI (no key, CORS blocks API) |
 
 So the Jev-vs-heuristic comparison is only meaningful when the game is
 served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
@@ -387,9 +387,10 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
 ## HUD and logging
 
 - **Matchup line** (under the title, yellow, large): exactly who is
-  playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)` or
-  `● Local AI (Black) vs ○ Jev (White)` in autoplay. White is always
-  Jev.
+  playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)`,
+  `● You (Black) vs ○ Local AI (White)` (no key), `● Local AI (Black)
+  vs ○ Jev (White)` (autoplay with key), or `● Local AI (Black) vs ○
+  Local AI (White)` (autoplay without key).
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
   panel over the board. It is cleared by New game, Undo, or the
@@ -398,14 +399,16 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
   options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
 - **Player combinations panel** (under the score, bordered): the
-  matchups — you vs Jev (needs `node server.js` + API key), or local AI
-  vs Jev (autoplay) — and the keys/buttons that switch them.
+  matchups — you vs Jev (needs `node server.js` + API key), you vs local
+  AI (no key needed), local AI vs Jev (autoplay with key), or local AI
+  vs local AI (autoplay without key) — and the keys/buttons that switch
+  them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, retry status, and the game result with both scores.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
-- **`WHITE: JEV` / `WHITE: JEV (NO KEY)`** (bottom-right): whether Jev
-  is enabled. Green when active, red when no key is set.
+- **`WHITE: JEV` / `WHITE: LOCAL AI`** (bottom-right): whether Jev or
+  the heuristic is driving White. Green for Jev, red for local AI.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
@@ -444,14 +447,12 @@ every request, so changes to `jev-go.html` need no restart — a browser
 refresh picks them up. Changes to `server.js` require a restart.
 
 **Mid-game failure**: if the server dies while a game is open, Jev
-polls fail and White stops moving — the HUD turns red and shows "NO
-KEY". The game retries up to 3 times (10s timeout per attempt) before
-showing an error message; it does not substitute the heuristic. Once
-the server is back, Jev resumes automatically on White's next turn,
-provided the server had a key when the page was loaded (`serverKey` is
-detected once at startup). If the page was loaded while the server was
-down, reload the page after starting the server, or press `J` and
-enter a key.
+polls fail and the game retries up to 3 times (10s timeout per attempt)
+before showing an error message. Once the server is back, Jev resumes
+automatically on White's next turn, provided the server had a key when
+the page was loaded (`serverKey` is detected once at startup). If the
+page was loaded while the server was down, reload the page after
+starting the server, or press `J` and enter a key.
 
 ### Constants
 

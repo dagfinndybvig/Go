@@ -42,7 +42,9 @@
 <div id="score"></div>
 <div id="modes">
   <b>Player combinations</b> — you vs <b>Jev</b> (needs <code>node server.js</code> + API key) ·
-  <b>local AI vs Jev</b> (autoplay)<br>
+  you vs <b>local AI</b> (no key needed) ·
+  <b>local AI vs Jev</b> (autoplay with key) ·
+  <b>local AI vs local AI</b> (autoplay without key)<br>
   Keys: <b>0</b> toggle autoplay · <b>J</b> enter API key (Jev needs it) · <b>L</b> Jev log ·
   or use the buttons above ·
   <a href="https://en.wikipedia.org/wiki/Go_(game)" target="_blank" rel="noopener">Go on Wikipedia</a>
@@ -493,11 +495,12 @@ function heuristicPick(moves, color) {
 
 const AUTO_DELAY = 700; // pause between autoplay moves
 
-// Player labels. White is always Jev — no fallback to the local heuristic.
-// In autoplay the local heuristic drives Black against Jev's White.
+// Player labels. White is Jev when a key is available, otherwise the
+// local heuristic. In autoplay the local heuristic drives Black.
 function labels() {
-  if (!autoplay) return { black: 'You', white: 'Jev' };
-  return { black: 'Local AI', white: 'Jev' };
+  const white = Jev.isEnabled() ? 'Jev' : 'Local AI';
+  if (!autoplay) return { black: 'You', white };
+  return { black: 'Local AI', white };
 }
 
 function applyMove(m, color) {
@@ -538,11 +541,13 @@ function jevMove(retries) {
   const moves = legalMoves(board, WHITE, lastMove);
   if (!moves.length) { doPass(WHITE); return; }
   if (!Jev.isEnabled()) {
+    // No key: fall back to the local heuristic so the game keeps playing.
+    // (This is the only fallback — low confidence and errors still retry.)
     setHud(false);
-    if (Jev.isProxied())
-      setStatus('Jev API key required — press J to enter a key.');
-    else
-      setStatus('Jev needs the local server (node server.js) and an API key. Press J to enter a key, or run the server and reload.');
+    const pick = heuristicPick(moves, WHITE);
+    if (pick.pass) { doPass(WHITE); return; }
+    setStatus('Local AI (White) is playing (no Jev API key).');
+    applyMove(pick.move, WHITE);
     return;
   }
   setHud(true);
@@ -737,7 +742,7 @@ function toggleAutoplay() {
 
 function setHud(enabled) {
   const el = document.getElementById('jevhud');
-  el.textContent = 'WHITE: ' + (enabled ? 'JEV' : 'JEV (NO KEY)');
+  el.textContent = 'WHITE: ' + (enabled ? 'JEV' : 'LOCAL AI');
   el.style.color = enabled ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
@@ -762,7 +767,7 @@ function renderJevLog() {
 }
 
 function promptForKey() {
-  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev — White will not move without a key). Note: Jev only works when served by node server.js on localhost — on GitHub Pages or file:// the API blocks cross-origin calls even with a key.', Jev.getKey() || '');
+  const key = prompt('Enter TypeSafe API key (leave empty to use the local AI for White instead of Jev). Note: Jev only works when served by node server.js on localhost — on GitHub Pages or file:// the API blocks cross-origin calls even with a key.', Jev.getKey() || '');
   if (key !== null) Jev.setKey(key.trim());
   refreshHud();
 }

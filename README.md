@@ -3,9 +3,11 @@
 # Jev Go
 
 A small 9x9 Go game where the White stones are played by
-[Jev](https://www.typesafe.ai), TypeSafe AI's "System One" decision model.
-You play Black against Jev. In autoplay mode, a built-in local heuristic
-AI plays Black against Jev's White.
+[Jev](https://www.typesafe.ai), TypeSafe AI's "System One" decision
+model, when an API key is available. Without a key, White falls back to
+a built-in local heuristic AI. You play Black. In autoplay mode, the
+local heuristic drives Black against Jev's White (or against itself if
+no key is set).
 
 Jev is a general-purpose decision model, not a dedicated Go engine.
 It receives a text description of the board and chooses one move per
@@ -35,7 +37,9 @@ server and an API key (see Running below). On Pages (or when opening
 `jev-go.html` directly without a server) the game tries the TypeSafe
 API directly with your browser key, but the API sends no CORS headers,
 so the browser blocks the call. To play against Jev, run `node server.js`
-locally.
+locally. Without a key (on Pages, file://, or localhost without a key),
+White is played by the local heuristic AI instead — the game still works,
+just without Jev.
 
 ## Rules
 
@@ -61,10 +65,9 @@ off/on (0)**, **API key (J)**, and **Jev log (L)**.
 
 ## Running
 
-**Without a server (White does not move):** open `jev-go.html` directly in
-a browser. No build step, no external assets. White will not move
-until you press **J** and enter an API key — there is no local-AI
-fallback for White.
+**Without a server (local AI plays White):** open `jev-go.html` directly in
+a browser. No build step, no external assets. Without an API key, White
+is played by the local heuristic AI — the game works, just without Jev.
 
 **With Jev AI:** the TypeSafe API does not send CORS headers, so
 browser-to-API calls are blocked. A zero-dependency Node.js proxy server
@@ -96,17 +99,19 @@ $env:TYPESAFE_API_KEY="yourkey"; node server.js
 The HUD shows who is playing at all times:
 
 - A yellow **matchup line** under the title with stone glyphs, e.g.
-  `● You (Black)  vs  ○ Jev (White)` or
-  `● Local AI (Black)  vs  ○ Jev (White)` (autoplay), naming the
-  actual driver of each colour.
+  `● You (Black)  vs  ○ Jev (White)`,
+  `● You (Black)  vs  ○ Local AI (White)` (no key),
+  `● Local AI (Black)  vs  ○ Jev (White)` (autoplay with key), or
+  `● Local AI (Black)  vs  ○ Local AI (White)` (autoplay without key),
+  naming the actual driver of each colour.
 - A bordered **player combinations** panel listing the possible
   matchups and how to switch between them.
 - The indicator in the bottom-right corner:
 
 - **green WHITE: JEV** — Jev is active and choosing White's moves
-- **red WHITE: JEV (NO KEY)** — no API key set; press J to enter one.
-  On Pages or file://, the status line also says to run `node server.js`
-  locally — the API blocks cross-origin calls even with a browser key.
+- **red WHITE: LOCAL AI** — no API key set; the local heuristic is
+  playing White. Press J to enter a key (Jev needs `node server.js` on
+  localhost).
 
 ### Starting, stopping, restarting the server
 
@@ -173,8 +178,10 @@ On each White turn:
 5. **Pick** — the game plays the highest-probability legal option from
    the distribution: Jev's best move, with no randomness.
 6. **Retry** — on timeout (10s) or error, the game retries up to 3
-   times before showing an error message. Jev always plays White — no
-   fallback to the local heuristic.
+   times before showing an error message. There is no fallback on low
+   confidence or errors — Jev always plays its best move. The only
+   fallback is when no API key is set: White is played by the local
+   heuristic instead.
 
 ```
 board state + group threats → text → filter to 30 candidates
@@ -195,8 +202,8 @@ across the board for a few seconds before a new game starts
 automatically. The score line and game-over message name the AIs
 instead of "you" — **Local AI** (Black) vs **Jev** (White) — so you
 can watch Jev's best moves against the greedy heuristic's
-captures-and-liberties play. Autoplay requires an API key; without one,
-White does not move.
+captures-and-liberties play. Without an API key, autoplay is local AI vs
+local AI — both sides use the heuristic.
 
 Toggling autoplay off mid-game returns control: you play Black from
 whatever position the board is in. Pass and Undo are disabled while
