@@ -17,6 +17,15 @@ also deliberately weak (greedy captures and liberties, no sequence
 reading), so the two are comparable — autoplay is a baseline AI
 benchmark, not a strong Go exhibition.
 
+In headless autoplay testing (3 games, Jev vs the local heuristic), Jev
+lost all three: 81-5.5, 81-5.5, and 81-5.5 — the heuristic captured 240
+stones to Jev's 8. Jev does not pass prematurely (that was fixed), and
+each move includes a 1-ply lookahead showing the opponent's best reply,
+but Jev still plays reactively — placing stones adjacent to the opponent
+rather than claiming open territory. The result is honest and
+interesting: a general-purpose decision model can play legal, plausible
+Go but cannot match even a simple greedy heuristic at strategic play.
+
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 

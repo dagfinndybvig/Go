@@ -46,10 +46,40 @@ In practice, Jev's Go play shows three patterns:
   many moves at 0.05–0.15. Jev itself is uncertain in most positions;
   high-confidence picks are almost always captures or atari saves.
 
-The state text includes a territory estimate and group-in-danger scan
-to help Jev see the strategic picture, and passing is discouraged while
-open points remain. But there is a ceiling on how much prompt context
-can compensate for a model that does not deeply understand Go.
+The state text includes a territory estimate, group-in-danger scan,
+and a 1-ply heuristic lookahead (each candidate move is annotated with
+the opponent's best reply: capture, atari, liberty reduction, or no
+threat). Passing is discouraged while open points remain. These
+measures fixed the most obvious blunders — Jev no longer passes
+prematurely, and it can see immediate tactical threats before choosing.
+But they do not address the strategic gap: Jev still plays reactively
+rather than building territory, and there is a ceiling on how much
+prompt context can compensate for a model that does not deeply
+understand Go.
+
+#### Measured results
+
+Headless autoplay testing (3 games, Jev White vs heuristic Black, with
+all improvements applied):
+
+| Game | Moves | Score | Heuristic caps | Jev caps | Jev passes |
+|------|-------|-------|----------------|----------|------------|
+| 1 | 171 | 81-5.5 (Black) | 79 | 3 | 0 |
+| 2 | 161 | 81-5.5 (Black) | 77 | 1 | 0 |
+| 3 | 179 | 81-5.5 (Black) | 84 | 4 | 0 |
+
+The heuristic won all three. Jev captured 8 stones total across 3 games;
+the heuristic captured 240. Jev's average confidence was 0.33, with most
+moves at 0.05-0.15. High-confidence picks (0.9+) were almost always
+captures or atari saves. The 1-ply lookahead correctly warned Jev about
+threats ("opponent can reduce your group to 2 liberties in reply"), but
+Jev did not change its play pattern in response — it continued placing
+stones adjacent to the opponent rather than claiming open space.
+
+The result is clear: a general-purpose decision model can play legal,
+plausible Go, but cannot match even a simple greedy heuristic at
+strategic play. The improvements (anti-pass, territory estimate,
+lookahead) help at the margins but do not close the strategic gap.
 
 The local heuristic is also deliberately weak — one-ply greedy, no
 sequence reading, no life-and-death — so the two AIs are comparable in
