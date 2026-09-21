@@ -7,6 +7,16 @@ A small 9x9 Go game where the White stones are played by
 You play Black against Jev. In autoplay mode, a built-in local heuristic
 AI plays Black against Jev's White.
 
+Jev is a general-purpose decision model, not a dedicated Go engine.
+It receives a text description of the board and chooses one move per
+turn — no search tree, no playouts, no board evaluation function. Go is
+one of the hardest games for this approach, and Jev plays at roughly
+beginner strength: it understands captures and atari but struggles with
+territory, eye shape, and long-term group safety. The local heuristic is
+also deliberately weak (greedy captures and liberties, no sequence
+reading), so the two are comparable — autoplay is a baseline AI
+benchmark, not a strong Go exhibition.
+
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 

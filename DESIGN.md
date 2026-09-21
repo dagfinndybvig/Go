@@ -23,6 +23,39 @@ Fight, Jev plays its best move here (argmax over the distribution)
 rather than a temperature-sampled one, and there is no heuristic
 fallback — Jev always plays White.
 
+### Why Jev is weak at Go
+
+Jev is a general-purpose decision model, not a dedicated Go engine. It
+receives a text description of the board and returns one move per turn
+— no search tree, no Monte Carlo playouts, no learned board evaluation.
+Dedicated Go AI (AlphaGo and its successors) needed deep neural
+networks trained on millions of self-play games plus tree search to
+reach human level; Jev has none of that machinery.
+
+In practice, Jev's Go play shows three patterns:
+
+- **Tactical awareness without strategy.** Jev finds captures and atari
+  saves well — these are described in the move criteria and map to
+  clear local reasoning. But it does not build territory, form eye
+  shape, or plan group safety beyond the immediate move.
+- **Reactive mirroring.** In quiet positions Jev tends to play directly
+  adjacent to the opponent's last move, creating contact fights rather
+  than claiming open space. On 9x9, where every point matters, this lets
+  the heuristic build territory unchallenged.
+- **Low confidence.** Average confidence per move is around 0.30, with
+  many moves at 0.05–0.15. Jev itself is uncertain in most positions;
+  high-confidence picks are almost always captures or atari saves.
+
+The state text includes a territory estimate and group-in-danger scan
+to help Jev see the strategic picture, and passing is discouraged while
+open points remain. But there is a ceiling on how much prompt context
+can compensate for a model that does not deeply understand Go.
+
+The local heuristic is also deliberately weak — one-ply greedy, no
+sequence reading, no life-and-death — so the two AIs are comparable in
+strength. Autoplay is a baseline AI benchmark: two limited approaches
+playing the same game, each showing what it can and cannot do.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
