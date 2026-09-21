@@ -102,7 +102,7 @@ The HUD shows who is playing at all times:
   `● You (Black)  vs  ○ Jev (White)`,
   `● You (Black)  vs  ○ Local AI (White)` (no key),
   `● Local AI (Black)  vs  ○ Jev (White)` (autoplay with key), or
-  `● Local AI (Black)  vs  ○ Local AI (White)` (autoplay without key),
+  `● Local AI 1 (Black)  vs  ○ Local AI 2 (White)` (autoplay without key),
   naming the actual driver of each colour.
 - A bordered **player combinations** panel listing the possible
   matchups and how to switch between them.

@@ -361,8 +361,8 @@ input:
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
 - The score line and game-over message name the AIs instead of "you":
-  **Local AI** (Black) vs **Jev** (White), or **Local AI** vs **Local
-  AI** when no key is set. Labels are computed by one `labels()`
+  **Local AI** (Black) vs **Jev** (White), or **Local AI 1** vs
+  **Local AI 2** when no key is set. Labels are computed by one `labels()`
   function (no parameters — White is Jev when a key exists, otherwise
   Local AI) so the pair is always consistent.
 - Pass and Undo are disabled; clicks are ignored.
@@ -390,7 +390,7 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
   playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)`,
   `● You (Black) vs ○ Local AI (White)` (no key), `● Local AI (Black)
   vs ○ Jev (White)` (autoplay with key), or `● Local AI (Black) vs ○
-  Local AI (White)` (autoplay without key).
+  `● Local AI 1 (Black) vs ○ Local AI 2 (White)` (autoplay without key).
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
   panel over the board. It is cleared by New game, Undo, or the

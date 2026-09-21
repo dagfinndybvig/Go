@@ -497,10 +497,13 @@ const AUTO_DELAY = 700; // pause between autoplay moves
 
 // Player labels. White is Jev when a key is available, otherwise the
 // local heuristic. In autoplay the local heuristic drives Black.
+// When both sides are the heuristic (autoplay without a key), they are
+// numbered: Local AI 1 (Black) vs Local AI 2 (White).
 function labels() {
-  const white = Jev.isEnabled() ? 'Jev' : 'Local AI';
-  if (!autoplay) return { black: 'You', white };
-  return { black: 'Local AI', white };
+  const jev = Jev.isEnabled();
+  if (!autoplay) return { black: 'You', white: jev ? 'Jev' : 'Local AI' };
+  if (jev) return { black: 'Local AI', white: 'Jev' };
+  return { black: 'Local AI 1', white: 'Local AI 2' };
 }
 
 function applyMove(m, color) {
@@ -742,7 +745,7 @@ function toggleAutoplay() {
 
 function setHud(enabled) {
   const el = document.getElementById('jevhud');
-  el.textContent = 'WHITE: ' + (enabled ? 'JEV' : 'LOCAL AI');
+  el.textContent = 'WHITE: ' + labels().white.toUpperCase();
   el.style.color = enabled ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
