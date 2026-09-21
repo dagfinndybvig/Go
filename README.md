@@ -40,8 +40,10 @@ off/on (0)**, **API key (J)**, and **Jev log (L)**.
 
 ## Running
 
-**Without Jev (local AI only):** open `jev-go.html` directly in a browser.
-No build step, no external assets.
+**Without a server (White does not move):** open `jev-go.html` directly in
+a browser. No build step, no external assets. White will not move
+until you press **J** and enter an API key — there is no local-AI
+fallback for White.
 
 **With Jev AI:** the TypeSafe API does not send CORS headers, so
 browser-to-API calls are blocked. A zero-dependency Node.js proxy server

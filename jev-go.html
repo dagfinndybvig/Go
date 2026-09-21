@@ -678,12 +678,12 @@ function renderJevLog() {
     new Date(e.t).toLocaleTimeString() + '  ' +
     (e.ok
       ? 'play ' + e.choice + '  conf ' + e.confidence.toFixed(2) + (e.jevChoice !== e.choice ? '  (jev: ' + e.jevChoice + ')' : '')
-      : 'fallback: ' + e.reason)
+      : 'error: ' + e.reason)
   ).join('\n') || 'No Jev decisions yet.';
 }
 
 function promptForKey() {
-  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev and use the local AI):', Jev.getKey() || '');
+  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev — White will not move without a key):', Jev.getKey() || '');
   if (key !== null) Jev.setKey(key.trim());
   refreshHud();
 }
