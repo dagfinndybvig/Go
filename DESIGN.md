@@ -310,12 +310,16 @@ gets the same move.
 There is no heuristic fallback. If Jev is unavailable:
 
 - No API key: the HUD shows "WHITE: JEV (NO KEY)" and the status line
-  says "Jev API key required — press J to enter a key." No move is
-  played.
+  says "Jev API key required — press J to enter a key." (on localhost) or
+  "Jev needs the local server (node server.js) and an API key. Press J
+  to enter a key, or run the server and reload." (on Pages/file://).
+  No move is played.
 - Timeout (10s) or network error: `jevMove` retries up to 3 times with
   1s between attempts. If all retries fail, an error message is shown
-  and the game waits — it does not substitute the heuristic.
-- Illegal choice: retried up to 3 times, then an error message is shown.
+  and the game waits — it does not substitute the heuristic. On
+  non-localhost, the message adds "or run node server.js locally."
+- Illegal choice: retried up to 3 times, then an error message is shown
+  with the same non-localhost hint.
 
 Every error is logged with its reason; every successful decision is
 logged with both Jev's original pick and the played pick.
@@ -394,8 +398,8 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
   options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
 - **Player combinations panel** (under the score, bordered): the
-  matchups — you vs Jev (needs an API key), or local AI vs Jev
-  (autoplay) — and the keys/buttons that switch them.
+  matchups — you vs Jev (needs `node server.js` + API key), or local AI
+  vs Jev (autoplay) — and the keys/buttons that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, retry status, and the game result with both scores.
 - **Score line**: captures for both sides with stone glyphs, labeled

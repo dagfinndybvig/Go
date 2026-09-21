@@ -104,7 +104,9 @@ The HUD shows who is playing at all times:
 - The indicator in the bottom-right corner:
 
 - **green WHITE: JEV** — Jev is active and choosing White's moves
-- **red WHITE: JEV (NO KEY)** — no API key set; press J to enter one
+- **red WHITE: JEV (NO KEY)** — no API key set; press J to enter one.
+  On Pages or file://, the status line also says to run `node server.js`
+  locally — the API blocks cross-origin calls even with a browser key.
 
 ### Starting, stopping, restarting the server
 

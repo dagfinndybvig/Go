@@ -95,7 +95,10 @@ There is no test framework. Tests are throwaway Node scripts using
   move there. Don't "fix" this by pointing the browser at the API
   directly; CORS blocks it. The endpoint logic uses the proxy
   (`/jev`) only on `localhost`/`127.0.0.1`; everywhere else it goes
-  direct to `https://api.typesafe.ai`, which the browser blocks.
+  direct to `https://api.typesafe.ai`, which the browser blocks. The
+  on-screen text reflects this: the modes panel says Jev needs
+  `node server.js` + API key, and error/status messages on non-localhost
+  say to run the server locally.
 - The user pushes from the web UI and other sessions concurrently.
   Expect push rejections; `git fetch` + `git rebase origin/main`, then
   push. Never force-push without asking.
