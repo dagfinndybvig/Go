@@ -90,9 +90,12 @@ There is no test framework. Tests are throwaway Node scripts using
 
 - `index.html` is a redirect to `jev-go.html`. Without it, Pages renders
   README.md instead of the game. Do not delete it.
-- Jev never runs on Pages (no proxy; `/jev` 404s) — White does not move
-  there until the user enters a browser key. Don't "fix" this by
-  pointing the browser at the API directly; CORS blocks it.
+- Jev never runs on Pages (the API sends no CORS headers, so the
+  browser blocks direct calls even with a browser key) — White does not
+  move there. Don't "fix" this by pointing the browser at the API
+  directly; CORS blocks it. The endpoint logic uses the proxy
+  (`/jev`) only on `localhost`/`127.0.0.1`; everywhere else it goes
+  direct to `https://api.typesafe.ai`, which the browser blocks.
 - The user pushes from the web UI and other sessions concurrently.
   Expect push rejections; `git fetch` + `git rebase origin/main`, then
   push. Never force-push without asking.

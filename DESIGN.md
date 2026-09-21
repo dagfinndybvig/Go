@@ -327,9 +327,9 @@ the TypeSafe API does not send CORS headers:
 
 | How you open the game | Jev? | Why |
 | --- | --- | --- |
-| `file://` (double-click `jev-go.html`) | No, until you enter a key | The game tries the API directly; browsers block cross-origin calls from `file://`. White does not move until you press `J` and enter a key — there is no heuristic fallback. |
+| `file://` (double-click `jev-go.html`) | No — CORS blocks it | The game tries the API directly with your browser key, but browsers block cross-origin calls from `file://`. White does not move — there is no heuristic fallback. Run `node server.js` instead. |
 | `http://localhost:3000` (`node server.js`) | Yes, if a key exists | The proxy forwards `POST /jev` server-side. The server injects `TYPESAFE_API_KEY` from its environment; a browser key entered with `J` also works and takes precedence. |
-| Hosted (GitHub Pages) | No, until you enter a key | There is no proxy on Pages, so `/jev` returns 404. White does not move — there is no heuristic fallback. Press `J` and enter a key to enable Jev directly against the API (CORS permitting). |
+| Hosted (GitHub Pages) | No — CORS blocks it | The game tries the API directly with your browser key, but the API sends no CORS headers (`access-control-allow-origin: null`), so the browser blocks the call. White does not move — there is no heuristic fallback. Run `node server.js` locally to play against Jev. |
 
 The HUD in the bottom-right corner reflects this at all times:
 
@@ -374,7 +374,7 @@ subtle part:
 | --- | --- |
 | `localhost:3000` with a key | Jev vs local heuristic — the real comparison |
 | `localhost:3000` without a key | Jev vs local heuristic, but White stalls (no key) |
-| GitHub Pages or `file://` | Same — White stalls until a key is entered |
+| GitHub Pages or `file://` | Same — CORS blocks the API even with a browser key |
 
 So the Jev-vs-heuristic comparison is only meaningful when the game is
 served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with

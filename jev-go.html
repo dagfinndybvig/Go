@@ -159,9 +159,12 @@ function legalMoves(bd, color, koBoard) {
 // by the Jev decision model. Jev always plays — no fallback to the local
 // heuristic. On error or timeout, the game retries and waits.
 const Jev = (() => {
-  const ENDPOINT = location.protocol.startsWith('http')
-    ? '/jev'
-    : 'https://api.typesafe.ai/v1/systemone';
+  // On localhost (served by server.js), use the proxy. Elsewhere
+  // (Pages, file://) go direct to the API — the browser key provides
+  // the Authorization header. CORS will block this on Pages (the API
+  // sends no CORS headers), but the error message is clearer than a 404.
+  const PROXY = location.hostname === 'localhost' || location.hostname === '127.0.0.1';
+  const ENDPOINT = PROXY ? '/jev' : 'https://api.typesafe.ai/v1/systemone';
   const MODEL = 'jev-latest';
   const COLS = 'ABCDEFGHJ';
   const LOG_MAX = 200;
@@ -170,7 +173,7 @@ const Jev = (() => {
   let apiKey = '';
   try { apiKey = localStorage.getItem('typesafe_api_key') || ''; } catch (e) {}
   let serverKey = false;
-  if (location.protocol.startsWith('http')) {
+  if (PROXY) {
     fetch('/jevstatus').then(r => r.json())
       .then(d => { serverKey = !!d.serverKey; refreshHud(); })
       .catch(() => {});

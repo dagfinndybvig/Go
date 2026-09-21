@@ -31,9 +31,11 @@ A short recap of the rules of Go, with links for learning more, is in
 
 The game is also served from GitHub Pages:
 **https://dagfinndybvig.github.io/Go/** — Jev needs the local proxy
-server and an API key (see Running below), so on Pages (or when opening
-`jev-go.html` directly without a server) White will not move until you
-press J and enter a key.
+server and an API key (see Running below). On Pages (or when opening
+`jev-go.html` directly without a server) the game tries the TypeSafe
+API directly with your browser key, but the API sends no CORS headers,
+so the browser blocks the call. To play against Jev, run `node server.js`
+locally.
 
 ## Rules
 
