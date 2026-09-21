@@ -762,7 +762,7 @@ function renderJevLog() {
 }
 
 function promptForKey() {
-  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev — White will not move without a key):', Jev.getKey() || '');
+  const key = prompt('Enter TypeSafe API key (leave empty to disable Jev — White will not move without a key). Note: Jev only works when served by node server.js on localhost — on GitHub Pages or file:// the API blocks cross-origin calls even with a key.', Jev.getKey() || '');
   if (key !== null) Jev.setKey(key.trim());
   refreshHud();
 }
