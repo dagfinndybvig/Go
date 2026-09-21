@@ -118,4 +118,8 @@ There is no test framework. Tests are throwaway Node scripts using
   extensions, and enemy contact.
 - `buildState` scans the board for all groups with 1-2 liberties and
   lists them as "Groups in danger" with coordinates, so Jev sees threats
-  before choosing.
+  before choosing. It also includes a `territoryEstimate()` — a rough
+  area score (stones + surrounded territory + komi) with an
+  ahead/behind/even judgment — so Jev knows if it should fight or
+  consolidate. Pass is discouraged in the state text and in the pass
+  criterion when more than 3 empty points remain on the board.

@@ -176,12 +176,17 @@ text. There is no fallback to the local heuristic.
   traditional Go notation), `X` = White, `O` = Black, `.` = empty.
 - The opponent's last move and Jev's own previous move (so it can avoid
   repeating).
+- **Territory estimate**: a rough area score for both sides (stones +
+  surrounded empty regions + komi), with a "you are ahead / behind /
+  even" judgment. This gives Jev urgency to fight for territory when it
+  is losing, and to consolidate when it is winning.
 - **Groups in danger**: a list of all groups (both colors) with 1–2
   liberties, with their coordinates and liberty count. This lets Jev
   see threats before choosing a move.
 - The number of candidate moves and strategic guidance: save groups in
   atari first, capture or attack weak opponent groups, keep groups
-  connected, avoid getting surrounded.
+  connected, avoid getting surrounded, and do not pass while there are
+  still open points on the board.
 
 #### Move filtering
 
@@ -215,8 +220,11 @@ with a tactical annotation computed from the resulting position:
 - `contact with enemy` — adjacent to an enemy stone
 - `edge point` / `open point` — fallback annotation for quiet moves
 
-Plus one extra criterion, `pass`, so Jev can end the game when nothing
-is worth playing.
+Plus one extra criterion, `pass`. When the board still has more than 3
+empty points, the pass criterion is annotated as "not recommended"
+with a warning that passing gives the opponent a free move. Only when
+the board is nearly settled (≤3 empty points) is pass described
+neutrally, so Jev can end the game.
 
 #### Move selection
 

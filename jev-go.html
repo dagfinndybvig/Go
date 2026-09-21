@@ -250,6 +250,41 @@ const Jev = (() => {
     return lines.join('\n');
   }
 
+  // Rough territory estimate: stones on board + empty regions surrounded
+  // by one color. Same logic as endGame scoring, but called mid-game to
+  // give Jev a sense of who is ahead.
+  function territoryEstimate() {
+    const seen = new Set();
+    let stonesB = 0, stonesW = 0, terrB = 0, terrW = 0;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        if (board[y][x] === BLACK) stonesB++;
+        if (board[y][x] === WHITE) stonesW++;
+      }
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        if (board[y][x] !== EMPTY || seen.has(x + ',' + y)) continue;
+        const region = [], stack = [[x, y]];
+        seen.add(x + ',' + y);
+        const touch = new Set();
+        while (stack.length) {
+          const [cx, cy] = stack.pop();
+          region.push([cx, cy]);
+          for (const [nx, ny] of neighbors(cx, cy)) {
+            const v = board[ny][nx];
+            if (v === EMPTY) { if (!seen.has(nx + ',' + ny)) { seen.add(nx + ',' + ny); stack.push([nx, ny]); } }
+            else touch.add(v);
+          }
+        }
+        if (touch.size === 1) {
+          const c = [...touch][0];
+          if (c === BLACK) terrB += region.length; else terrW += region.length;
+        }
+      }
+    const scoreB = stonesB + terrB, scoreW = stonesW + terrW + 5.5;
+    return { scoreB, scoreW, stonesB, stonesW, terrB, terrW };
+  }
+
   function buildState(moves) {
     // Scan for groups with 1-2 liberties (threats both colors must respond to)
     const seen = new Set();
@@ -275,18 +310,31 @@ const Jev = (() => {
       "Opponent's last move: " + (lastCoord ? coordName(lastCoord.x, lastCoord.y) : 'none (start of game or a pass)'),
       'Your previous move: ' + (jevLastChoice || 'none yet'),
     ];
+    // Territory estimate so Jev knows if it is ahead or behind
+    const est = territoryEstimate();
+    const leader = est.scoreW > est.scoreB ? 'you' : est.scoreB > est.scoreW ? 'opponent' : 'neither';
+    lines.push('Approximate score right now — you: ' + est.scoreW + ' (stones ' + est.stonesW + ' + territory ' + est.terrW + ' + komi 5.5), opponent: ' + est.scoreB + ' (stones ' + est.stonesB + ' + territory ' + est.terrB + '). ' + (leader === 'you' ? 'You are ahead — consolidate and defend.' : leader === 'opponent' ? 'You are behind — attack weak opponent groups and fight for territory.' : 'The game is even — play carefully to gain an advantage.'));
     if (threats.length) {
       lines.push('Groups in danger:');
       for (const t of threats) lines.push('  ' + t);
     }
-    lines.push('There are ' + moves.length + ' candidate moves, listed in the criteria. Choose the strongest point for White. Prioritise saving your groups from atari, capturing opponent groups in atari, and attacking weak opponent groups. On 9x9, group safety is critical — keep your groups connected and do not let them get surrounded.');
+    lines.push('There are ' + moves.length + ' candidate moves, listed in the criteria. Choose the strongest point for White. Prioritise saving your groups from atari, capturing opponent groups in atari, and attacking weak opponent groups. On 9x9, group safety is critical — keep your groups connected and do not let them get surrounded. Do not pass while there are still open points on the board — passing gives the opponent a free move and costs you territory.');
     return lines.join('\n');
   }
 
   async function query(moves) {
     const criteria = {};
     for (const m of moves) criteria[coordName(m.x, m.y)] = describeMove(m);
-    criteria.pass = 'skip your turn; if both players pass in a row the game ends and the position is scored';
+    // Only offer pass when the board is nearly full — passing while there
+    // are open points just gives the opponent a free move.
+    let emptyCount = 0;
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++)
+        if (board[y][x] === EMPTY) emptyCount++;
+    if (emptyCount <= 3)
+      criteria.pass = 'skip your turn; if both players pass in a row the game ends and the position is scored';
+    else
+      criteria.pass = 'not recommended — there are still ' + emptyCount + ' open points on the board. Passing gives the opponent a free move. Only pass when the board is settled and all remaining moves would reduce your territory.';
     const stateStr = buildState(moves);
     const body = {
       model: MODEL,
