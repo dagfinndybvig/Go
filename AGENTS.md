@@ -115,7 +115,11 @@ There is no test framework. Tests are throwaway Node scripts using
 - `describeMove` always reports the resulting group's liberty count on
   every move (not just dangerous ones), so Jev can judge safety. It also
   detects saves from atari, atari threats, 2-liberty threats, group
-  extensions, and enemy contact.
+  extensions, and enemy contact. Each criterion includes a 1-ply
+  lookahead: the opponent's best reply is simulated with the heuristic
+  and summarized as "opponent can capture N / put you in atari / reduce
+  to 2 liberties / no immediate threat". This is pure JavaScript, no
+  extra Jev calls.
 - `buildState` scans the board for all groups with 1-2 liberties and
   lists them as "Groups in danger" with coordinates, so Jev sees threats
   before choosing. It also includes a `territoryEstimate()` — a rough

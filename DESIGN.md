@@ -252,6 +252,13 @@ with a tactical annotation computed from the resulting position:
 - `extends your group` — connects to a friendly group
 - `contact with enemy` — adjacent to an enemy stone
 - `edge point` / `open point` — fallback annotation for quiet moves
+- **Lookahead**: each criterion includes the opponent's best reply on
+  the resulting board, simulated with the heuristic. Jev sees "opponent
+  can capture N stones in reply", "opponent can put you in atari in
+  reply", "opponent can reduce your group to 2 liberties in reply", or
+  "opponent has no immediate threat in reply" for every candidate move.
+  This gives Jev a 1-ply forward view without any extra API calls —
+  pure JavaScript, adds negligible latency.
 
 Plus one extra criterion, `pass`. When the board still has more than 3
 empty points, the pass criterion is annotated as "not recommended"

@@ -221,6 +221,30 @@ const Jev = (() => {
     else if (ownG.libs === 2) bits.push('unsafe (2 liberties after move)');
     else if (ownG.libs === 3) bits.push('3 liberties after move');
     else bits.push(ownG.libs + ' liberties after move');
+    // Lookahead: simulate opponent's best reply on the resulting board.
+    // This gives Jev a 1-ply forward view: "if I play here, opponent can
+    // capture N / put me in atari / reduce me to 2 liberties".
+    const oppMoves = legalMoves(m.board, BLACK, m.board);
+    if (oppMoves.length) {
+      let oppBestCap = 0, oppAtariYou = false, oppReduceYou = false;
+      for (const om of oppMoves) {
+        if (om.captured > oppBestCap) oppBestCap = om.captured;
+        // Check if opponent's reply puts any White group in atari or 2-liberty danger
+        for (const [ox, oy] of neighbors(om.x, om.y)) {
+          if (om.board[oy][ox] === WHITE) {
+            const wg = groupAndLiberties(om.board, ox, oy);
+            if (wg.libs === 1) oppAtariYou = true;
+            if (wg.libs === 2) oppReduceYou = true;
+          }
+        }
+      }
+      const lookahead = [];
+      if (oppBestCap > 0) lookahead.push('opponent can capture ' + oppBestCap + ' stone' + (oppBestCap === 1 ? '' : 's') + ' in reply');
+      if (oppAtariYou) lookahead.push('opponent can put you in atari in reply');
+      else if (oppReduceYou) lookahead.push('opponent can reduce your group to 2 liberties in reply');
+      if (!lookahead.length) lookahead.push('opponent has no immediate threat in reply');
+      bits.push(lookahead.join('; '));
+    }
     // Approaches / extends
     let extendsOwn = false, approachesEnemy = false;
     for (const [nx, ny] of neighbors(m.x, m.y)) {
