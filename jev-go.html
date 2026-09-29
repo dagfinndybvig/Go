@@ -431,7 +431,7 @@ function blackAutoMove() {
 
 // White's turn: Jev plays. No fallback to the local heuristic.
 function jevMove(retries) {
-  if (gameOver) return;
+  if (gameOver || turn !== WHITE) return;
   if (retries === undefined) retries = 0;
   const moves = legalMoves(board, WHITE, lastMove);
   if (!moves.length) { doPass(WHITE); return; }
