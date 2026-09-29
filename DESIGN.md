@@ -243,6 +243,32 @@ General Go principles for choosing a move:
 - Prefer moves that both build your area and reduce the opponent's.
 ```
 
+#### Aggression style experiment
+
+Instead of adding knowledge, the Choice and Score instructions were
+reweighted toward high aggression: "hunt captures, attack and cut weak
+opponent groups, invade and reduce opponent territory... defend only
+when a group is in immediate danger", with the Score rubric told to
+favor captures, ataris, cuts, and invasions over quiet moves. Same
+runner, 5 pairs, seeds 1–5, greedy anchor, both resolving to
+`jev-1.13.0`.
+
+| Variant | Jev W-D-L | Score rate | Mean margin | API calls | Input tokens |
+|---------|-----------|------------|-------------|-----------|--------------|
+| Baseline (balanced instructions) | 3-0-7 | 30.0% | −4.0 | 418 | 1,680,207 |
+| Aggression directive | 0-0-10 | 0.0% | −81.0 | 739 | 2,882,902 |
+
+Every game collapsed identically: as Black, Jev ended with zero stones
+on the board (0 to the greedy anchor's 86.5); as White, only komi (5.5
+to 81). The anchor captured 64–71 stones per game while Jev captured
+none, and Jev passed 8–15 times. The margins were identical across all
+seeds, so the collapse was deterministic: the directive pushed Jev into
+contact fights it cannot evaluate without search, it repeatedly played
+into atari against an opponent that captures any zero-liberty group,
+lost every stone, and passed out the remaining plies. A style directive
+that raises aggression without adding reading ability was strictly
+harmful; reverted after the run.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,

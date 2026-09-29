@@ -14,6 +14,8 @@
 - [x] Test a static general-advice block in the state: it measurably
       hurt (mean margin −4.0 → −45.2 over paired seeds; see DESIGN.md)
       and was reverted.
+- [x] Test a high-aggression style directive in the instructions: 0-10,
+      Jev lost every stone in every game (see DESIGN.md); reverted.
 
 ## Next steps
 
