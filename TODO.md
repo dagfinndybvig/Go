@@ -43,8 +43,13 @@
 - [ ] Extend `blackGroupFate` to evaluate 3+ liberty post-extension
       groups (longer capturing races) — currently no claim is made
       there; judge by seed-paired p at 40 games.
-- [ ] Install KataGo on Windows (binary + human-SL model) and run the
-      `katago-5k` anchor for an external labeled comparison.
+- [x] Install KataGo on Windows (v1.15.0 Eigen CPU build + human-SL model
+      under `~/.local/share/katago`, explicit `--katago-*` paths since
+      Homebrew discovery does not exist there) and run the `katago-5k`
+      anchor: 20 games (seeds 1-10), Jev 1-0-19, mean margin −32.5,
+      seed-paired 0-10, the one win as White (+5.5) — the `rank_5k` profile
+      is decisively stronger, the expected external calibration point
+      (setup and results in BENCHMARK.md/README).
 - [x] Save position-level traces and terminal area margins: `benchmark.js`
       writes `<output>.traces.jsonl` — one entry per ply (pre-move board, ko
       snapshot, captures, legal count, chosen move, and Jev's scores/

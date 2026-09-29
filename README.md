@@ -390,6 +390,27 @@ curl -fL 'https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c38
   -o ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz
 ```
 
+On Windows, download the CPU (Eigen) build and the human-SL model once (the
+zip ships `katago.exe`, its DLLs, and `gtp_human5k_example.cfg`):
+
+```sh
+mkdir -p ~/.local/share/katago/bin ~/.local/share/katago/models
+curl -fL -o ~/.local/share/katago/katago-eigen.zip 'https://github.com/lightvector/KataGo/releases/download/v1.15.0/katago-v1.15.0-eigen-windows-x64.zip'
+curl -fL -o ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz 'https://github.com/lightvector/KataGo/releases/download/v1.15.0/b18c384nbt-humanv0.bin.gz'
+powershell -NoProfile -Command "Expand-Archive ~/.local/share/katago/katago-eigen.zip -DestinationPath ~/.local/share/katago/bin -Force"
+```
+
+Homebrew auto-discovery does not exist on Windows, so pass the paths
+explicitly:
+
+```sh
+node benchmark.js --pairs 10 --opponents katago-5k \
+  --katago-bin ~/.local/share/katago/bin/katago.exe \
+  --katago-model ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz \
+  --katago-human-model ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz \
+  --katago-config ~/.local/share/katago/bin/gtp_human5k_example.cfg
+```
+
 With `TYPESAFE_API_KEY` in the environment or the repository's `.env`, run ten
 color-swapped pairs (20 games) against KataGo's `rank_5k` human-SL profile:
 
@@ -403,6 +424,13 @@ include model hashes and per-game color/results; a sibling `.traces.jsonl`
 file records every position, Jev's per-candidate scores, and the terminal
 area ownership map. See [the benchmark guide](BENCHMARK.md)
 for alternate opponents, path overrides, and rating caveats.
+
+Result (Windows, 10 pairs, seeds 1-10, 20 games, `jev-1.13.0` vs KataGo
+v1.15.0): Jev lost 1-19, mean margin −32.5, seed-paired 0-10; the one win
+came as White (+5.5), and every game ended in two passes. The `rank_5k`
+profile is decisively stronger than Jev — the expected external
+calibration point, played under identical rules on both sides (simple ko
+is enforced since commit `174139f`).
 
 Press **L** in-game to watch the decisions live. In the browser console,
 `window.jevLog()` returns the last 200 decisions and `window.jevClear()`

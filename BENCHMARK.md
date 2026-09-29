@@ -91,10 +91,37 @@ suicide illegal). Per-game JSONL records include both model SHA-256 hashes and
 the resolved KataGo version. KataGo and the downloaded weights are local
 dependencies and are not stored in this repository.
 
+On Windows there is no Homebrew to discover, so download the CPU (Eigen)
+build and the human-SL model, unzip the build under
+`~/.local/share/katago/bin` (it ships `katago.exe`, the required DLLs, and
+`gtp_human5k_example.cfg`), and pass every path explicitly:
+
+```sh
+node benchmark.js --pairs 10 --opponents katago-5k \
+  --katago-bin ~/.local/share/katago/bin/katago.exe \
+  --katago-model ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz \
+  --katago-human-model ~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz \
+  --katago-config ~/.local/share/katago/bin/gtp_human5k_example.cfg
+```
+
+The default `--katago-human-model` path
+(`~/.local/share/katago/models/b18c384nbt-humanv0.bin.gz`) matches this
+layout. The Windows runs recorded below passed the human-SL model as both
+the normal and the human model; with `humanSLProfile` active the human
+model picks the moves, so the anchor's policy is the intended `rank_5k` one.
+
 The single-pair setup pilot completed: Jev lost once as Black (−28.5 points)
 and once as White (−53.5), using 105 API calls total. That confirms the engine
 integration and color swap work; two games do not establish a useful strength
 estimate.
+
+A 10-pair Windows run (seeds 1-10, 20 games, `jev-1.13.0`, Eigen CPU build,
+post-ko-fix engine) scored Jev 1-0-19 against the `rank_5k` profile: mean
+margin −32.5, seed-paired 0-10, every game ending in two passes, 915 API
+calls. Jev's only win was as White (+5.5); as Black it lost 0-10. Both sides
+played the same simple-ko rules. The profile is decisively stronger than
+Jev at this stage — the expected result against a labeled human-strength
+anchor, and the useful external calibration point for future prompt work.
 
 ## Interpreting the rating
 
