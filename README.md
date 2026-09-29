@@ -29,6 +29,22 @@ for the experiment history and per-seed results.
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 
+## The takeaway
+
+The three generations below tell one story. Lukas's rebuild — per-move
+Scores plus a Choice prior plus a Noul pass gate — is the architecture
+every later result lives inside; nothing since has replaced it. The
+mechanical-facts generation made it stronger by supplying what Jev
+cannot compute (captures, liberties, ladders, snapback) and
+withholding what it should judge for itself. And the paired,
+color-balanced benchmark Lukas also built is the instrument that
+proved all of it — including proving his own build weaker than the
+facts build (3-0-7 vs 14-0-6 over the same 20 games), which is exactly
+what a sound methodology is for: being more trustworthy than its
+author. All of it is relative to the local pool — against KataGo's
+5-kyu profile the current build is 1-19 — so what is vindicated here
+is the approach, not the destination.
+
 ## How it evolved
 
 The game went through three generations, each measured against the
