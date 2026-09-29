@@ -125,7 +125,7 @@ takes precedence. The key is stored in `localStorage`.
 TYPESAFE_API_KEY=yourkey node server.js
 
 # Windows (cmd.exe)
-set TYPESAFE_API_KEY=yourkey && node server.js
+set "TYPESAFE_API_KEY=yourkey" && node server.js
 
 # Windows (PowerShell)
 $env:TYPESAFE_API_KEY="yourkey"; node server.js
