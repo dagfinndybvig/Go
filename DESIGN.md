@@ -205,6 +205,44 @@ sequence reading, no life-and-death — so the two AIs are comparable in
 strength. Autoplay is a baseline AI benchmark: two limited approaches
 playing the same game, each showing what it can and cannot do.
 
+#### Static advice block experiment
+
+A fixed block of general Go principles was prepended to the evaluation
+state — about 250 tokens per call, position-independent, identical every
+turn. The retained runner ran 5 color-balanced pairs (10 games, seeds
+1–5) against the greedy anchor with and without the block, same seeds,
+both resolving to `jev-1.13.0`.
+
+| Variant | Jev W-D-L | Score rate | Mean margin | API calls | Input tokens |
+|---------|-----------|------------|-------------|-----------|--------------|
+| Baseline (no advice) | 3-0-7 | 30.0% | −4.0 | 418 | 1,680,207 |
+| With advice block | 4-0-6 | 40.0% | −45.2 | 615 | 2,160,695 |
+
+The win rate moved from 30% to 40%, well inside the overlapping 95%
+ranges, but the mean margin collapsed from −4.0 to −45.2. Without the
+block, Jev's losses were close (−0.5 to −20.5). With the block, five
+losses were catastrophic: Jev captured 0–1 stones while the greedy
+anchor captured 67–75, with games stretching to 159–161 plies and Jev
+passing 5–13 times. The passive-sounding principles ("do not attach",
+"do not play inside solid opponent territory", "first- and second-line
+points are usually too small") are the likely cause: they steered Jev
+away from contact, letting the greedy opponent build territory and
+capture whole groups. The block was reverted after the run; the exact
+text is preserved here for future per-principle tests:
+
+```
+General Go principles for choosing a move:
+- Save your own groups in atari; capture opponent groups in atari.
+- Keep stones connected: separated stones can be attacked one at a time.
+- Stones with two or three liberties are weak. Give your weak groups liberties; reduce the liberties of weak opponent groups.
+- A group with two eyes cannot be captured. Make eye shape for groups you cannot afford to lose.
+- Beware ladders: a capture that starts a ladder fails if the opponent can play a ladder blocker ahead of it.
+- Balance territory and influence. Third- and fourth-line points are good early; first- and second-line points are usually too small.
+- Do not attach to strong opponent stones without a reason; contact fights often help the stronger side.
+- Do not fill your own eyes, and do not play inside solid opponent territory unless the new group can live.
+- Prefer moves that both build your area and reduce the opponent's.
+```
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,

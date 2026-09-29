@@ -11,6 +11,9 @@
 - [x] Compare compact Choice-only against multi-output scoring over the
       same ten deterministic seeds; record per-game outcomes and token
       usage in DESIGN.md.
+- [x] Test a static general-advice block in the state: it measurably
+      hurt (mean margin −4.0 → −45.2 over paired seeds; see DESIGN.md)
+      and was reverted.
 
 ## Next steps
 
