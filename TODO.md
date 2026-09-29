@@ -23,6 +23,11 @@
       baseline's 3-0-7 (30%), 7/10 wins as Black (see DESIGN.md).
 - [x] Test a score-estimate fact ("if the game ended now"): it undid the
       group-facts gain (6-0-4 → 3-0-7, margin +4.7 → −31.0); reverted.
+- [x] Add ladder warnings to candidate deltas (immediate-capture and
+      ladder-captured flags per point): score rate within noise of
+      group facts alone (13-0-7 vs 14-0-6 over 20 games) but the loss
+      profile improved — worst loss −86.5 → −35.5, mean margin
+      +1.9 → +6.9, catastrophic losses 3 → 2; kept (see DESIGN.md).
 
 ## Next steps
 

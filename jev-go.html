@@ -211,6 +211,52 @@ const Jev = (() => {
     ].join('\n');
   }
 
+  // Liberties of a group as [x, y] pairs.
+  function groupLiberties(bd, group) {
+    const out = [], seen = new Set();
+    for (const [gx, gy] of group)
+      for (const [nx, ny] of neighbors(gx, gy))
+        if (bd[ny][nx] === EMPTY) {
+          const k = nx + ',' + ny;
+          if (!seen.has(k)) { seen.add(k); out.push([nx, ny]); }
+        }
+    return out;
+  }
+
+  // Simulate a ladder: the group of `color` containing (gx, gy) has at most
+  // 2 liberties and the opponent is to move. The opponent ataris, the group
+  // extends at its last liberty, repeat. Returns true if the group is
+  // captured within maxSteps.
+  function ladderCaptured(bd, gx, gy, color, maxSteps) {
+    if (maxSteps === undefined) maxSteps = 30;
+    if (maxSteps <= 0) return false;
+    const opp = color === BLACK ? WHITE : BLACK;
+    const g = groupAndLiberties(bd, gx, gy);
+    if (g.libs === 0) return true;
+    if (g.libs >= 3) return false;
+    if (g.libs === 1) {
+      const lib = groupLiberties(bd, g.group)[0];
+      const r = tryMove(bd, lib[0], lib[1], opp);
+      return r.legal; // legal fill = captured; suicide fill = group lives
+    }
+    const libs = groupLiberties(bd, g.group);
+    for (const [lx, ly] of libs) {
+      const r = tryMove(bd, lx, ly, opp);
+      if (!r.legal) continue;
+      const g2 = groupAndLiberties(r.board, gx, gy);
+      if (g2.libs === 0) return true; // captured immediately
+      if (g2.libs === 1) {
+        const lib2 = groupLiberties(r.board, g2.group)[0];
+        const r2 = tryMove(r.board, lib2[0], lib2[1], color);
+        if (!r2.legal) return true; // cannot extend: dead
+        const g3 = groupAndLiberties(r2.board, gx, gy);
+        if (g3.libs <= 2 && ladderCaptured(r2.board, gx, gy, color, maxSteps - 1)) return true;
+      }
+      // g2.libs >= 3: this atari fails; try the other liberty
+    }
+    return false;
+  }
+
   // Mechanical position facts: groups with few liberties, and what the
   // opponent can capture on their reply. Rules-engine output only — no
   // evaluative language.
@@ -249,8 +295,14 @@ const Jev = (() => {
         for (let x = 0; x < N; x++)
           if (board[y][x] === BLACK && m.board[y][x] === EMPTY) captured.push(coordName(x, y));
       const own = groupAndLiberties(m.board, m.x, m.y);
+      let warning = '';
+      if (own.libs === 1) {
+        warning = ' — Black captures the group (' + own.group.length + ' stones) next turn.';
+      } else if (own.libs === 2 && ladderCaptured(m.board, m.x, m.y, WHITE)) {
+        warning = ' — Black captures the group in a ladder (' + own.group.length + ' stones).';
+      }
       return coordName(m.x, m.y) + ': place White; capture ' + (captured.join(',') || 'none') +
-        '; resulting connected group has ' + own.libs + ' liberties.';
+        '; resulting connected group has ' + own.libs + ' liberties.' + warning;
     });
     return [
       buildState(),

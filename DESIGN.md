@@ -356,6 +356,33 @@ the six losses were the catastrophic pattern (every stone captured,
 159–160 plies, 10–21 passes), so the facts mitigate the blindness
 without removing it.
 
+#### Ladder warnings in the candidate deltas
+
+The remaining catastrophic losses come from one-ply blindness: Jev sees
+a group's liberty count but cannot read that an atari extension still
+dies in a ladder. The rules engine can. `ladderCaptured()` simulates the
+atari–extend sequence (opponent ataris at each liberty, the group
+extends at its last liberty, repeated up to 30 steps, with suicide and
+edge effects handled by `tryMove`), and each candidate point whose
+resulting group would be captured that way carries a mechanical warning
+in its delta line, alongside the existing immediate-capture warning for
+groups left with one liberty.
+
+Confirmed over 10 color-balanced pairs (20 games, seeds 1–10) against
+the greedy anchor, `jev-1.13.0`:
+
+| Variant | Games | Jev W-D-L | Score rate | Mean margin | Worst loss | Catastrophic losses |
+|---------|-------|-----------|------------|-------------|------------|---------------------|
+| Group facts, 20 games | 20 | 14-0-6 | 70.0% | +1.9 | −86.5 | 3 |
+| + ladder warnings, 20 games | 20 | 13-0-7 | 65.0% | +6.9 | −35.5 | 2 |
+
+The score rate is within noise of the group-facts variant (13 versus 14
+wins), but the loss profile improved exactly where the warnings aimed:
+the worst loss went from −86.5 (every stone captured) to −35.5, the
+mean margin rose from +1.9 to +6.9, and catastrophic losses fell from
+three to two. The warnings are mechanical consequences, not verdicts,
+so they follow the working rule above. Kept.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
@@ -515,7 +542,10 @@ candidate move deltas:
 
 Each legal point adds its captured-stone coordinates and the
 resulting liberties of the played White group, so Jev can evaluate the
-counterfactual without receiving 81 full successor boards. A mechanical
+counterfactual without receiving 81 full successor boards. When the
+played group would be left in atari, or in atari-after-extension that a
+ladder captures, the point's line carries a mechanical warning ("Black
+captures the group (N stones) next turn" / "in a ladder"). A mechanical
 facts block follows the board: groups with 3 or fewer liberties (both
 colors, with stone and liberty counts and atari flags) and capture
 threats (which White stones Black can capture on their reply).
