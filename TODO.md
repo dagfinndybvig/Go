@@ -28,6 +28,11 @@
       group facts alone (13-0-7 vs 14-0-6 over 20 games) but the loss
       profile improved — worst loss −86.5 → −35.5, mean margin
       +1.9 → +6.9, catastrophic losses 3 → 2; kept (see DESIGN.md).
+- [x] Add snapback trade counts and Black-group fate facts (cannot
+      extend / ladder-caught / can escape) to candidate deltas: score
+      rate within noise (12-0-8 over 20 games) but worst loss
+      −35.5 → −18.5, mean margin +6.9 → +11.8, catastrophic losses
+      2 → 1; kept (see DESIGN.md).
 
 ## Next steps
 

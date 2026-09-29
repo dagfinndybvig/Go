@@ -257,6 +257,35 @@ const Jev = (() => {
     return false;
   }
 
+  // Fate of the Black group at (gx, gy) after a White move, with Black to
+  // reply: can Black save it by extending? Rules-engine output only — no
+  // evaluative language. Returns '' when there is nothing to report.
+  function blackGroupFate(bd, gx, gy) {
+    const g = groupAndLiberties(bd, gx, gy);
+    if (g.libs >= 3) return '';
+    if (g.libs === 1) {
+      const lib = groupLiberties(bd, g.group)[0];
+      const r = tryMove(bd, lib[0], lib[1], BLACK);
+      if (!r.legal) return 'cannot extend (White captures it next turn)';
+      const g2 = groupAndLiberties(r.board, gx, gy);
+      if (g2.libs <= 2) {
+        return ladderCaptured(r.board, gx, gy, BLACK) ? 'caught in a ladder even if Black extends' : 'can escape by extending';
+      }
+      return ''; // extension gives 3+ liberties; deeper chase not evaluated
+    }
+    let anyLegal = false;
+    const libs = groupLiberties(bd, g.group);
+    for (const [lx, ly] of libs) {
+      const r = tryMove(bd, lx, ly, BLACK);
+      if (!r.legal) continue;
+      anyLegal = true;
+      const g2 = groupAndLiberties(r.board, gx, gy);
+      if (g2.libs >= 3) return '';
+      if (!ladderCaptured(r.board, gx, gy, BLACK)) return '';
+    }
+    return anyLegal ? 'caught in a ladder even if Black extends' : 'cannot extend (White captures it next turn)';
+  }
+
   // Mechanical position facts: groups with few liberties, and what the
   // opponent can capture on their reply. Rules-engine output only — no
   // evaluative language.
@@ -297,12 +326,30 @@ const Jev = (() => {
       const own = groupAndLiberties(m.board, m.x, m.y);
       let warning = '';
       if (own.libs === 1) {
-        warning = ' — Black captures the group (' + own.group.length + ' stones) next turn.';
+        if (captured.length > 0) {
+          warning = ' — Black recaptures the group (' + own.group.length + ' stones) next turn; White captured ' + captured.length + ' this move.';
+        } else {
+          warning = ' — Black captures the group (' + own.group.length + ' stones) next turn.';
+        }
       } else if (own.libs === 2 && ladderCaptured(m.board, m.x, m.y, WHITE)) {
         warning = ' — Black captures the group in a ladder (' + own.group.length + ' stones).';
       }
+      let hunt = '';
+      if (own.libs >= 2) {
+        const seenB = new Set();
+        for (let y = 0; y < N; y++)
+          for (let x = 0; x < N; x++) {
+            if (m.board[y][x] !== BLACK || seenB.has(x + ',' + y)) continue;
+            const bg = groupAndLiberties(m.board, x, y);
+            for (const [gx, gy] of bg.group) seenB.add(gx + ',' + gy);
+            if (bg.libs > 2) continue;
+            const fate = blackGroupFate(m.board, x, y);
+            if (!fate) continue;
+            hunt += ' — the Black group at ' + coordName(x, y) + ' (' + bg.group.length + ' stones, ' + bg.libs + ' liberties): ' + fate + '.';
+          }
+      }
       return coordName(m.x, m.y) + ': place White; capture ' + (captured.join(',') || 'none') +
-        '; resulting connected group has ' + own.libs + ' liberties.' + warning;
+        '; resulting connected group has ' + own.libs + ' liberties.' + warning + hunt;
     });
     return [
       buildState(),

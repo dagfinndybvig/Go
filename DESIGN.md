@@ -383,6 +383,42 @@ mean margin rose from +1.9 to +6.9, and catastrophic losses fell from
 three to two. The warnings are mechanical consequences, not verdicts,
 so they follow the working rule above. Kept.
 
+#### Snapback and Black-group fate facts
+
+Two more mechanical facts in the same family, both targeting the
+remaining no-search blindness:
+
+- Snapback trades: when a move captures stones but still leaves the
+  played group with one liberty, the line now states both counts
+  ("Black recaptures the group (N stones) next turn; White captured M
+  this move") instead of only the capture warning, so Jev can judge
+  the trade itself.
+- Black-group fate: when a move ataris or ladder-catches a Black group,
+  the line reports whether Black can save it — `blackGroupFate()`
+  simulates Black's saving extension and, if the extended group still
+  has at most two liberties, reuses `ladderCaptured()` for the chase.
+  Three outcomes: "cannot extend (White captures it next turn)",
+  "caught in a ladder even if Black extends", "can escape by
+  extending". When the extension gains three or more liberties the
+  deeper chase is not evaluated and nothing is claimed. The facts are
+  suppressed when the played White group is itself in atari (Black
+  would capture it first).
+
+Confirmed over 10 color-balanced pairs (20 games, seeds 1–10) against
+the greedy anchor, `jev-1.13.0`:
+
+| Variant | Games | Jev W-D-L | Score rate | Mean margin | Worst loss | Catastrophic losses |
+|---------|-------|-----------|------------|-------------|------------|---------------------|
+| Group facts, 20 games | 20 | 14-0-6 | 70.0% | +1.9 | −86.5 | 3 |
+| + ladder warnings, 20 games | 20 | 13-0-7 | 65.0% | +6.9 | −35.5 | 2 |
+| + snapback/fate facts, 20 games | 20 | 12-0-8 | 60.0% | +11.8 | −18.5 | 1 |
+
+The score rate drifted down one win per step (14 → 13 → 12, all within
+noise), while every loss metric improved monotonically: worst loss
+−86.5 → −35.5 → −18.5, catastrophic losses 3 → 2 → 1, mean margin
++1.9 → +6.9 → +11.8. The facts trade a little win rate for the
+near-elimination of the catastrophic collapse. Kept.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
@@ -545,10 +581,17 @@ resulting liberties of the played White group, so Jev can evaluate the
 counterfactual without receiving 81 full successor boards. When the
 played group would be left in atari, or in atari-after-extension that a
 ladder captures, the point's line carries a mechanical warning ("Black
-captures the group (N stones) next turn" / "in a ladder"). A mechanical
-facts block follows the board: groups with 3 or fewer liberties (both
-colors, with stone and liberty counts and atari flags) and capture
-threats (which White stones Black can capture on their reply).
+captures the group (N stones) next turn" / "in a ladder"); when the
+move captures stones and the played group is still left with one
+liberty, the line states both counts so Jev can judge the snapback
+trade itself. Moves that atari or ladder-catch a Black group carry the
+group's fate ("cannot extend", "caught in a ladder even if Black
+extends", "can escape by extending") — computed with Black's saving
+extension simulated, and withheld when the extension gains three or
+more liberties. A mechanical facts block follows the board: groups with
+3 or fewer liberties (both colors, with stone and liberty counts and
+atari flags) and capture threats (which White stones Black can capture
+on their reply).
 
 #### Candidate move set
 
