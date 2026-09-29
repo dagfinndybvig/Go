@@ -417,6 +417,22 @@ function eloDifference(scoreRate) {
   return 400 * Math.log10(scoreRate / (1 - scoreRate));
 }
 
+// Exact two-sided sign test p-value: probability of a result at least as
+// lopsided as `successes` vs `failures` under a fair coin.
+function binomialCoeff(n, k) {
+  let r = 1;
+  for (let i = 1; i <= k; i++) r = r * (n - k + i) / i;
+  return r;
+}
+function signTestP(successes, failures) {
+  const n = successes + failures;
+  if (!n) return null;
+  const smaller = Math.min(successes, failures);
+  let tail = 0;
+  for (let k = 0; k <= smaller; k++) tail += binomialCoeff(n, k);
+  return Math.min(1, 2 * tail / Math.pow(2, n));
+}
+
 function summarize(records) {
   const groups = new Map();
   for (const record of records) {
@@ -439,11 +455,27 @@ function summarize(records) {
       ci[0] === 0 ? -Infinity : eloDifference(ci[0]),
       ci[1] === 1 ? Infinity : eloDifference(ci[1]),
     ];
+    // Paired by seed: each pair is Jev-Black + Jev-White against the same
+    // seed; the pair's combined margin cancels the color advantage.
+    const pairs = new Map();
+    for (const g of games) {
+      if (!g.pair) continue;
+      if (!pairs.has(g.pair)) pairs.set(g.pair, 0);
+      pairs.set(g.pair, pairs.get(g.pair) + g.jevMargin);
+    }
+    let pairWins = 0, pairLosses = 0;
+    for (const total of pairs.values()) {
+      if (total > 0) pairWins++;
+      else if (total < 0) pairLosses++;
+    }
     output.push({
       opponent, games: games.length, wins, draws, losses,
       scoreRate: rate,
       eloDifference: eloDifference(rate),
       approximateElo95: eloBounds,
+      signTestP: signTestP(wins, losses),
+      pairSignTestP: signTestP(pairWins, pairLosses),
+      pairs: pairs.size,
       jevBlack: { games: jevBlack.length, wins: blackWins },
       jevWhite: { games: jevWhite.length, wins: whiteWins },
       meanScoreMargin: games.reduce((sum, g) => sum + g.jevMargin, 0) / games.length,
@@ -720,6 +752,8 @@ async function main() {
       ', black wins ' + row.jevBlack.wins + '/' + row.jevBlack.games +
       ', white wins ' + row.jevWhite.wins + '/' + row.jevWhite.games +
       ', mean margin ' + row.meanScoreMargin.toFixed(1) +
+      ', sign test p ' + (row.signTestP == null ? 'n/a' : row.signTestP.toFixed(3)) +
+      ', seed-paired p ' + (row.pairSignTestP == null ? 'n/a' : row.pairSignTestP.toFixed(3)) +
       ', calls ' + row.totalApiCalls + ', tokens ' + row.inputTokens + '/' + row.outputTokens +
       ', model ' + (row.models.join(', ') || 'unreported') +
       (row.opponentModel ? ', anchor ' + row.opponentModel : '')

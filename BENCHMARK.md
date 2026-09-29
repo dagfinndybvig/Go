@@ -81,6 +81,21 @@ same formula. With only a few games this interval will be wide. A perfect
 record displays an infinite point estimate and a finite confidence range where
 possible; it does not mean the strength is known to be infinite.
 
+Two exact two-sided sign tests accompany each opponent row:
+
+- `sign test p` — the probability that wins and losses at least as lopsided
+  as the observed record would arise from a fair coin (draws excluded). This
+  asks whether Jev beats this anchor at all.
+- `seed-paired p` — the same test on seed-paired games: each pair is one
+  Jev-Black and one Jev-White game against the same seed, and a pair counts
+  by the sign of its combined margin, which cancels the color advantage.
+  This is the stricter color-balanced question and the one to read when
+  comparing prompt variants.
+
+A p-value above roughly 0.05 means the record is indistinguishable from a
+coin flip at this sample size — treat the Elo difference as unresolved
+rather than as evidence of equality.
+
 The number `1000` for `local-greedy` is an arbitrary local anchor. The direct
 Elo differences against other opponents are separate head-to-head estimates;
 they should not be averaged into one rating unless those opponents are also
