@@ -314,6 +314,28 @@ capture whole groups. A fact about the final score is not the same kind
 of input as a fact about the board — it invites settling rather than
 fighting. Reverted after the run; the group facts remain.
 
+#### What helps and what hurts
+
+Five experiments with the same runner and seeds draw one distinction:
+
+| Input type | Examples | Measured effect |
+|------------|----------|-----------------|
+| Facts the board computes | Candidate deltas, weak-group scan, capture threats | Helps: 9/10 vs Choice-only; 30% → 60% vs baseline |
+| Balanced tactical instructions | "Save groups in atari, capture, build territory, keep connected" | The working baseline |
+| One-sided reweighting | Aggression directive (0-10, margin −81); passive principles (margin −45) | Hurts in both directions |
+| Verdicts about the position | Score estimate "if the game ended now" | Hurts most: invites passing (margin −31) |
+
+The baseline instructions already tell Jev what to do, and that works —
+obedience is not the problem. The failures share a shape: Jev complies
+with whatever the prompt emphasizes, without checking it against the
+position. One-sided reweighting removes the balance it cannot restore
+itself; a verdict pre-empts the evaluation and Jev acts on it rationally
+(a settled score makes passing correct, so it passes and loses every
+stone). The working rule: give Jev what it cannot compute itself —
+mechanical consequences, group status — and withhold what it should
+judge itself: how strongly to weight attack, whether the position is
+settled.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
