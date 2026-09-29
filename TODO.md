@@ -64,3 +64,17 @@
       of substituting heuristic. No `fallbackToHeuristic`, no `whiteIsJev`,
       no `CONFIDENCE_FLOOR`. `labels()` simplified. Timeout 3s -> 10s.
       (commit `014223f`)
+- [x] Fix simple-ko enforcement: `lastMove` stores the pre-move board, so
+      `isKo` compares a candidate against the position before the
+      opponent's last move — the old post-move snapshot equals the current
+      board, so the check never fired. Same fix in `benchmark.js`
+      `playGame`. Post-fix confirmation: 10 pairs vs greedy, seeds 1-10:
+      16-0-4, seed-paired p = 0.0039 (commit `174139f`)
+- [x] Harden `server.js`: bind `127.0.0.1` by default (`HOST=0.0.0.0` to
+      expose on the LAN), refuse `/jev` bodies over 256 KB with `413`
+      (commit `c3bd9c8`)
+- [x] Document the loopback bind, body cap, and exact `lastMove` ko
+      semantics in README, DESIGN, and AGENTS (commit `bbed4aa`)
+- [x] Note in README and DESIGN that the 160-game full-anchor run predates
+      the ko fix, with the post-fix confirmation recorded alongside
+      (commit `150c750`)
