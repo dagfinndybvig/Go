@@ -115,6 +115,9 @@ There is no test framework. Tests are throwaway Node scripts using
 - The user pushes from the web UI and other sessions concurrently.
   Expect push rejections; `git fetch` + `git rebase origin/main`, then
   push. Never force-push without asking.
+- Development happens directly on `main` — it is the working branch
+  and the Pages source. `lukas-main` is an archive of the integrated
+  fork work, kept for reference; do not commit there.
 
 ### Jev integration invariants
 
