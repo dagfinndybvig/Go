@@ -5,21 +5,22 @@ Notes for coding agents working in this repo. Read this before editing.
 ## What this is
 
 A 9x9 Go game (`jev-go.html`, single file, no dependencies) whose White
-stones are always played by the TypeSafe "System One" decision model
-(Jev) — no fallback to a local heuristic. A local greedy heuristic
-drives Black in autoplay mode. `server.js` is a zero-dependency Node
-proxy that makes Jev work locally. `benchmark.js` runs paired,
-color-balanced rating matches against fixed opponent anchors. See DESIGN.md
-for architecture and README.md for usage.
+stones are played by the TypeSafe "System One" decision model (Jev)
+when an API key is available, with a local greedy heuristic as fallback
+when no key is set. A local greedy heuristic drives Black in autoplay
+mode. `server.js` is a zero-dependency Node proxy that makes Jev work
+locally. `benchmark.js` runs paired, color-balanced rating matches
+against fixed opponent anchors. See DESIGN.md for architecture and
+README.md for usage.
 
 ## Gotchas
 
 ### CRLF vs LF (the big one)
 
-The working copy is LF, but any `git checkout` / `git rebase` / `git
-stash pop` converts files to CRLF (Windows `core.autocrlf`). After that,
-edit-tool `old_string` matching silently fails with "not found" because
-the file now has `\r\n` while your string has `\n`.
+The repo blobs are LF, but `core.autocrlf=true` means any `git
+checkout` / `git rebase` / `git stash pop` leaves the working copy
+CRLF. After that, edit-tool `old_string` matching silently fails with
+"not found" because the file now has `\r\n` while your string has `\n`.
 
 Fix: normalize before editing after any git operation that touches files:
 

@@ -14,12 +14,14 @@
 
 ## Next steps
 
-- [ ] Keep a reproducible benchmark runner if this experiment continues;
-      the 10-game runner was temporary and used Mulberry32 seeds 1–10.
 - [ ] Save position-level traces and terminal area margins before trying
       DSPy/ReAnchor calibration.
 
 ## Done (pushed)
+
+- [x] Keep a reproducible benchmark runner: `benchmark.js` is committed,
+      with color-balanced pairs, anchor definitions (BENCHMARK.md), and
+      Mulberry32 seeds.
 
 - [x] Autoplay status line lists players Black-first (commit `d7d65c2`)
 - [x] Canvas flipped to Go orientation: row 1 at bottom, matching Jev's text

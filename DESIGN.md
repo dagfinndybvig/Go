@@ -334,9 +334,10 @@ beginner strength.
 
 ### Jev AI (TypeSafe System One)
 
-White's moves are always chosen by Jev — a typed decision model that
-returns choices with probability distributions instead of generating
-text. There is no fallback to the local heuristic.
+White's moves are chosen by Jev when an API key is available — a typed
+decision model that returns choices with probability distributions
+instead of generating text. Without a key, White falls back to the
+local heuristic.
 
 - **Endpoint**: `POST /jev` (proxied) or `POST
   https://api.typesafe.ai/v1/systemone` (direct)
@@ -442,7 +443,8 @@ There are two play modes, toggled with **0**:
 
 You click to place Black stones; White is Jev. Pass and Undo work.
 Clicks during White's turn or after game over are ignored. Without an
-API key, White does not move — press `J` to enter one.
+API key, White is played by the local heuristic — press `J` to enter
+one and switch to Jev.
 
 ### Autoplay mode
 
@@ -461,7 +463,8 @@ input:
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
   resumes.
-- Autoplay requires an API key; without one, White does not move.
+- Without an API key, both sides use the local heuristic (Local AI 1
+  vs Local AI 2) — the game keeps playing.
 
 **What autoplay actually compares depends on hosting** — this is the
 subtle part:
@@ -481,7 +484,7 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
 - **Matchup line** (under the title, yellow, large): exactly who is
   playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)`,
   `● You (Black) vs ○ Local AI (White)` (no key), `● Local AI (Black)
-  vs ○ Jev (White)` (autoplay with key), or `● Local AI (Black) vs ○
+  vs ○ Jev (White)` (autoplay with key), or
   `● Local AI 1 (Black) vs ○ Local AI 2 (White)` (autoplay without key).
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
@@ -507,7 +510,8 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
   when the argmax overrode it; errors are shown with their reason.
 - **Console**: `window.jevLog()` returns the full 200-entry ring buffer;
   `window.jevClear()` empties it. Log entries carry `{ t, ok, choice,
-  jevChoice, confidence, state, probabilities, reason }`.
+  jevChoice, confidence, probabilities, passProbability, passAllowed,
+  scores, usage, model, state, reason }`.
 
 ## Architecture
 
@@ -540,9 +544,9 @@ is stopped.
 every request, so changes to `jev-go.html` need no restart — a browser
 refresh picks them up. Changes to `server.js` require a restart.
 
-**Mid-game failure**: if the server dies while a game is open, Jev
-polls fail and the game retries up to 3 times (10s timeout per attempt)
-before showing an error message. Once the server is back, Jev resumes
+**Mid-game failure**: if the server dies while a game is open, Jev's
+move requests fail and the game retries up to 3 times (10s timeout per
+attempt) before showing an error message. Once the server is back, Jev resumes
 automatically on White's next turn, provided the server had a key when
 the page was loaded (`serverKey` is detected once at startup). If the
 page was loaded while the server was down, reload the page after

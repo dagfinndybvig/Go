@@ -145,13 +145,14 @@ lsof -ti :3000 | xargs kill
 instance is still running. Stop it with the commands above, then start
 again.
 
-**If the server stops mid-game** — Jev polls fail and White stops
-moving (the HUD turns red and shows "NO KEY"). The game retries up to
-3 times before showing an error. Once the server is running again, Jev
-resumes automatically on White's next turn — no page reload needed, as
-long as the server had a key when the page was loaded. If the page was
-loaded while the server was down, either reload the page after starting
-the server, or press `J` and enter a key.
+**If the server stops mid-game** — Jev's move requests fail and the
+game retries up to 3 times before showing an error; White waits rather
+than falling back to the heuristic (the HUD keeps showing
+`WHITE: JEV` if a server key was detected at load). Once the server is
+running again, Jev resumes automatically on White's next turn — no page
+reload needed, as long as the server had a key when the page was
+loaded. If the page was loaded while the server was down, either reload
+the page after starting the server, or press `J` and enter a key.
 
 ## How it works
 
