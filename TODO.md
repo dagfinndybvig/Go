@@ -43,6 +43,15 @@
 - [ ] Extend `blackGroupFate` to evaluate 3+ liberty post-extension
       groups (longer capturing races) — currently no claim is made
       there; judge by seed-paired p at 40 games.
+      Status: implemented (`raceCaptured`, a bounded adversarial
+      liberty-race chase; claims only on proven captures) and validated
+      locally — unit fixtures (dead straight-three eye fires, live
+      two-eyed group stays silent) and a sweep over 2,182 real trace
+      positions (9 new claims, all existing claim counts unchanged,
+      ~5% timing cost). The 40-game comparison is pending: the TypeSafe
+      API returned HTTP 402 (quota exhausted) after 36 baseline games
+      (seeds 1-18, `benchmark-results-race-baseline.jsonl`); seeds
+      19-20 and the new-build run remain to be played.
 - [x] Install KataGo on Windows (v1.15.0 Eigen CPU build + human-SL model
       under `~/.local/share/katago`, explicit `--katago-*` paths since
       Homebrew discovery does not exist there) and run the `katago-5k`

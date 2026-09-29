@@ -403,10 +403,16 @@ remaining no-search blindness:
   the line reports whether Black can save it — `blackGroupFate()`
   simulates Black's saving extension and, if the extended group still
   has at most two liberties, reuses `ladderCaptured()` for the chase.
-  Three outcomes: "cannot extend (White captures it next turn)",
+  Outcomes: "cannot extend (White captures it next turn)",
   "caught in a ladder even if Black extends", "can escape by
-  extending". When the extension gains three or more liberties the
-  deeper chase is not evaluated and nothing is claimed. The facts are
+  extending", and "caught in a liberty race even if Black extends".
+  The last covers extensions that gain exactly three liberties:
+  `raceCaptured()` runs a bounded adversarial chase — White fills a
+  liberty, Black answers by extending at any liberty, and the claim
+  fires only when every extension line ends in capture within the
+  budget; escapes, eye-making defenses, and exhausted budgets stay
+  silent. Extensions gaining four or more liberties are not evaluated
+  and nothing is claimed. The facts are
   suppressed when the played White group is itself in atari (Black
   would capture it first).
 
@@ -639,9 +645,10 @@ move captures stones and the played group is still left with one
 liberty, the line states both counts so Jev can judge the snapback
 trade itself. Moves that atari or ladder-catch a Black group carry the
 group's fate ("cannot extend", "caught in a ladder even if Black
-extends", "can escape by extending") — computed with Black's saving
-extension simulated, and withheld when the extension gains three or
-more liberties. A mechanical facts block follows the board: groups with
+extends", "caught in a liberty race even if Black extends", "can
+escape by extending") — computed with Black's saving
+extension simulated, and withheld when the extension gains four or
+more liberties or the liberty-race chase is inconclusive. A mechanical facts block follows the board: groups with
 3 or fewer liberties (both colors, with stone and liberty counts and
 atari flags) and capture threats (which White stones Black can capture
 on their reply).
