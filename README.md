@@ -56,7 +56,10 @@ previous one:
    color-balanced games, and finished with the full local-anchor
    standard: 160 games with paired significance tests. Jev beats all
    four anchors; see the [second benchmark section](#benchmark-mechanical-facts-and-the-full-anchor-pool)
-   below.
+   below. KataGo judged none of these steps — it was not installed on
+   the measurement machine, so every fact was kept or dropped on local
+   anchors alone; the [external evaluation](#benchmark-against-katago)
+   came after the generation was finished.
 
 The lesson running through all three generations: give Jev what it
 cannot compute itself (mechanical consequences, group status), withhold
@@ -394,6 +397,19 @@ than the greedy heuristic," while the `rank_5k` profile is an external
 reference point of approximate human strength. It is a model-labeled
 profile, not a calibrated Elo — see the caveats in
 [BENCHMARK.md](BENCHMARK.md).
+
+In the project's evolution KataGo played three roles. Lukas defined it
+as an anchor in generation 2 and used it once, as a two-game pilot
+(−28.5, −53.5) that validated the engine integration and color swap.
+It judged nothing in generation 3: every mechanical-facts variant was
+kept or dropped on local anchors alone. And after generation 3 and the
+simple-ko fix, it delivered the external evaluation the local pool
+cannot: Jev lost 1-19 (mean margin −32.5), meaning the facts
+generation's gains over greedy are relative — the build still loses
+decisively to a profile labeled 5 kyu. That is also why the ko fix
+mattered for this anchor specifically: KataGo is the only opponent
+whose own engine would have rejected a ko recapture, so the claimed
+rules parity was false until commit `174139f`.
 
 On macOS, install KataGo and download its human-SL model once:
 

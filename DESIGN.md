@@ -477,6 +477,40 @@ p = 0.0039, against 14-0-6 (p = 0.021) for the same seeds pre-fix, so
 the headline holds under the corrected rules. The table is kept as
 originally measured; the other anchors have not been re-run post-fix.
 
+### KataGo's role in the evaluation
+
+KataGo entered in Lukas's rebuild (`aef43a7`) as the design's one
+external anchor: the local pool is self-referential — every local
+opponent is defined by this repo's own heuristic, so win rates against
+it cannot say whether Jev got absolutely stronger.
+
+During the mechanical-facts generation it was not the judge. Every
+fact variant (position facts, ladder warnings, snapback, the reverted
+advice block and score-estimate) was kept or dropped on seed-paired
+results against local anchors alone; the full-anchor standard ran the
+four local anchors and not KataGo, which was not installed on the
+measurement machine. KataGo's only appearance was the two-game pilot
+(−28.5, −53.5), which validated the engine integration and the color
+swap, not strength.
+
+The external evaluation came after generation 3 was finished and the
+simple-ko fix landed: 20 color-swapped games on Windows against the
+`rank_5k` profile scored 1-0-19, mean margin −32.5, worst −64.5 (see
+BENCHMARK.md). Two readings. The facts generation's improvements are
+relative, not absolute — the build that beats greedy 30-10 and cut
+catastrophic losses still loses 19 of 20 to a profile labeled 5 kyu,
+and its collapse profile against KataGo mirrors the one the facts line
+reduced against greedy. And the rules-parity claim behind this anchor
+was false until `174139f`: KataGo is the only opponent whose own
+engine would have rejected a ko recapture, which is why the ko audit
+mattered for this anchor at all.
+
+Going forward, judge calibration work (DSPy/ReAnchor, built on the
+position traces) on both pools: the local pool detects changes cheaply
+and seed-pairs them, but only the external anchor detects overfitting
+to greedy. The `rank_5k` profile is a model label, not a calibrated
+Elo (see BENCHMARK.md for the caveats).
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
