@@ -336,6 +336,26 @@ mechanical consequences, group status — and withhold what it should
 judge itself: how strongly to weight attack, whether the position is
 settled.
 
+#### Twenty-game confirmation of the position facts
+
+The group-facts variant (weak-group scan + capture threats) was
+confirmed over 10 color-balanced pairs (20 games, seeds 1–10) against
+the greedy anchor, `jev-1.13.0`.
+
+| Variant | Games | Jev W-D-L | Score rate | Mean margin | Black wins | API calls | Input tokens |
+|---------|-------|-----------|------------|-------------|------------|-----------|--------------|
+| Baseline (no facts) | 10 | 3-0-7 | 30.0% | −4.0 | 0/5 | 418 | 1,680,207 |
+| Group facts, 10 games | 10 | 6-0-4 | 60.0% | +4.7 | 2/5 | 416 | 1,681,185 |
+| Group facts, 20 games | 20 | 14-0-6 | 70.0% | +1.9 | 7/10 | 994 | 3,728,281 |
+
+The 20-game run confirms the gain: 70% versus the baseline's 30%, with
+Jev winning 7/10 as Black (0/5 in the baseline) and a positive mean
+margin. Several wins were large (+45.5, +58.5, +75.5, with Jev capturing
+38–59 stones). The failure mode is reduced but not eliminated: three of
+the six losses were the catastrophic pattern (every stone captured,
+159–160 plies, 10–21 passes), so the facts mitigate the blindness
+without removing it.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
