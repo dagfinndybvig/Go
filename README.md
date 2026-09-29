@@ -68,7 +68,7 @@ previous one:
    standard: 160 games with paired significance tests. Jev beats all
    four anchors; see the [second benchmark section](#benchmark-mechanical-facts-and-the-full-anchor-pool)
    below. KataGo judged none of these steps — it was not installed on
-   the measurement machine, so every fact was kept or dropped on local
+   the measurement machine at first, so every fact was kept or dropped on local
    anchors alone; the [external evaluation](#benchmark-against-katago)
    came after the generation was finished, and put the gains in
    perspective: 1-19 against KataGo's 5-kyu profile, so the facts
