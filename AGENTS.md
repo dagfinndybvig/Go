@@ -150,17 +150,16 @@ There is no test framework. Tests are throwaway Node scripts using
   `ladderCaptured()` says the ladder dies, and a Black-group fate
   report from `blackGroupFate()` ("cannot extend (White captures it
   next turn)" / "caught in a ladder even if Black extends" / "can
-  escape by extending" / "caught in a liberty race even if Black
-  extends") for Black groups reduced to <=2 liberties.
-  `blackGroupFate` simulates Black's saving extension; extensions to
-  <=2 liberties are chased by `ladderCaptured()`, extensions to 3
-  liberties by `raceCaptured()` (a bounded adversarial chase: White
-  fills liberties, Black answers at any liberty, and the claim fires
-  only when every extension line dies within budget — inconclusive
-  chases and 4+ liberty extensions stay silent). Fate facts are
+  escape by extending") for Black groups reduced to <=2 liberties.
+  `blackGroupFate` simulates Black's saving extension and withholds a
+  claim when the extension gains 3+ liberties; fate facts are
   suppressed when the played White group is itself in atari. Keep new
   facts mechanical — one-sided directives and position verdicts
-  measurably hurt (see DESIGN.md).
+  measurably hurt (see DESIGN.md). A bounded liberty-race chase
+  ("caught in a liberty race even if Black extends") was tested over 40
+  paired games and changed nothing (seed-paired 14-5 both, loss
+  profile worse); it was reverted — don't re-add it without new
+  evidence.
 
 - The benchmark runner keeps Jev player-relative: when Jev plays actual
   Black, the benchmark swaps board colors and capture counts before asking

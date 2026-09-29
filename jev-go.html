@@ -257,39 +257,6 @@ const Jev = (() => {
     return false;
   }
 
-  // Longer liberty race: the group still has liberties, White to move. White
-  // fills a liberty; Black answers by extending at any liberty. A capture is
-  // claimed only when every extension line ends in capture within the
-  // budget; escapes, eye-making defenses, and exhausted budgets return false
-  // so no claim is made. Only moves on the group's own liberties are
-  // considered, so the claim reads: caught even if Black keeps extending.
-  function raceCaptured(bd, gx, gy, color, maxPlies, budget) {
-    if (maxPlies === undefined) maxPlies = 8;
-    if (budget === undefined) budget = { left: 250 };
-    if (maxPlies <= 0 || budget.left <= 0) return false;
-    const opp = color === BLACK ? WHITE : BLACK;
-    const g = groupAndLiberties(bd, gx, gy);
-    if (g.libs === 0) return true;
-    if (g.libs >= 4) return false;
-    for (const [lx, ly] of groupLiberties(bd, g.group)) {
-      const w = tryMove(bd, lx, ly, opp);
-      if (!w.legal) continue;
-      if (w.board[gy][gx] !== color) return true; // the fill captured the group
-      const after = groupAndLiberties(w.board, gx, gy);
-      if (after.libs >= g.libs) continue; // fill did not tighten the race
-      budget.left--;
-      if (budget.left <= 0) return false;
-      let allLose = true;
-      for (const [dx, dy] of groupLiberties(w.board, after.group)) {
-        const d = tryMove(w.board, dx, dy, color);
-        if (!d.legal) continue;
-        if (!raceCaptured(d.board, gx, gy, color, maxPlies - 1, budget)) { allLose = false; break; }
-      }
-      if (allLose) return true;
-    }
-    return false;
-  }
-
   // Fate of the Black group at (gx, gy) after a White move, with Black to
   // reply: can Black save it by extending? Rules-engine output only — no
   // evaluative language. Returns '' when there is nothing to report.
@@ -304,25 +271,18 @@ const Jev = (() => {
       if (g2.libs <= 2) {
         return ladderCaptured(r.board, gx, gy, BLACK) ? 'caught in a ladder even if Black extends' : 'can escape by extending';
       }
-      // Extension gives 3+ liberties; a longer liberty race can still kill.
-      return raceCaptured(r.board, gx, gy, BLACK) ? 'caught in a liberty race even if Black extends' : '';
+      return ''; // extension gives 3+ liberties; deeper chase not evaluated
     }
     let anyLegal = false;
-    let raceDead = false;
     const libs = groupLiberties(bd, g.group);
     for (const [lx, ly] of libs) {
       const r = tryMove(bd, lx, ly, BLACK);
       if (!r.legal) continue;
       anyLegal = true;
       const g2 = groupAndLiberties(r.board, gx, gy);
-      if (g2.libs >= 3) {
-        if (!raceCaptured(r.board, gx, gy, BLACK)) return ''; // escapes
-        raceDead = true; // race-dead; another extension may still live
-        continue;
-      }
+      if (g2.libs >= 3) return '';
       if (!ladderCaptured(r.board, gx, gy, BLACK)) return '';
     }
-    if (raceDead) return 'caught in a liberty race even if Black extends';
     return anyLegal ? 'caught in a ladder even if Black extends' : 'cannot extend (White captures it next turn)';
   }
 

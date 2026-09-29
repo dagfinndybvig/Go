@@ -229,8 +229,7 @@ line carries a mechanical warning; when the move captures stones and
 the played group is still left with one liberty, the line states both
 counts (the snapback trade). Moves that atari or ladder-catch a Black
 group report whether Black can save it ("cannot extend", "caught in a
-ladder even if Black extends", "caught in a liberty race even if Black
-extends", "can escape by extending"). A mechanical
+ladder even if Black extends", "can escape by extending"). A mechanical
 facts block follows the board: groups with 3 or fewer liberties (both
 colors) and capture threats — which White stones Black could capture on
 their reply. The legal move set is complete (up to 81
