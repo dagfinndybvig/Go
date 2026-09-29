@@ -19,6 +19,8 @@
 - [x] Add mechanical position facts to the state (weak-group scan +
       capture threats): 3-0-7 → 6-0-4 over paired seeds at identical
       cost; kept (see DESIGN.md).
+- [x] Test a score-estimate fact ("if the game ended now"): it undid the
+      group-facts gain (6-0-4 → 3-0-7, margin +4.7 → −31.0); reverted.
 
 ## Next steps
 

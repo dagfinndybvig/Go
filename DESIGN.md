@@ -292,6 +292,28 @@ completes the pattern from the two prior experiments: exact rules-engine
 facts improve play, evaluative framing hurts. The facts block is kept in
 the game.
 
+#### Score-estimate fact experiment
+
+A third fact was added to the facts block: the current area-score
+estimate (stones + empty regions touching only one color, komi 5.5) as
+it would stand if the game ended now. Same runner, 5 pairs, seeds 1–5,
+greedy anchor, `jev-1.13.0`.
+
+| Variant | Jev W-D-L | Score rate | Mean margin | API calls | Input tokens |
+|---------|-----------|------------|-------------|-----------|--------------|
+| Group facts only | 6-0-4 | 60.0% | +4.7 | 416 | 1,681,185 |
+| Group facts + score estimate | 3-0-7 | 30.0% | −31.0 | 552 | 1,951,819 |
+
+The score estimate undid the group-facts gain: back to 3-0-7 with a
+−31.0 mean margin, and the catastrophic pattern returned. In the three
+blowout losses Jev passed 22–23 times and lost every stone (0 captures,
+44–58 captured by the anchor) in 145–160-ply games. The "if the game
+ended now" framing apparently read as "the position is settled": when
+the estimate looked decided, Jev passed, letting the greedy anchor
+capture whole groups. A fact about the final score is not the same kind
+of input as a fact about the board — it invites settling rather than
+fighting. Reverted after the run; the group facts remain.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
