@@ -27,6 +27,39 @@ for the experiment history and per-seed results.
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 
+## How it evolved
+
+The game went through three generations, each measured against the
+previous one:
+
+1. **First version** (`main` branch, through commit `0d24bc2`): Jev
+   received a board description with a territory estimate, strengthened
+   anti-pass language, and 1-ply lookahead annotations in each move
+   description. Measured against the local greedy heuristic in
+   autoplay, it lost all three games — the heuristic captured every
+   stone.
+2. **Lukas's rebuild** (commits `a510643`–`aef43a7`, from
+   [his fork's main branch](https://github.com/LukasMosser/Go)): stripped
+   the prompt to the compact board plus the complete legal move list,
+   added per-move `Score` outputs with a `Choice` prior and a `Noul`
+   pass gate, and built the retained paired color-balanced benchmark
+   runner with Elo estimates and opponent anchors (including a KataGo
+   human-SL profile). In his ten-game comparison the compact
+   Choice-only prompt lost 0/10 while candidate scoring won 9/10 —
+   see the [first benchmark section](#benchmark) below.
+3. **Mechanical facts** (commits `9354e3b`–`7fd71a1`, this branch):
+   added rules-engine-computed facts to the state — weak-group scan,
+   capture threats, ladder warnings, snapback trade counts, and
+   Black-group fate reports — each step measured with paired
+   color-balanced games, and finished with the full local-anchor
+   standard: 160 games with paired significance tests. Jev beats all
+   four anchors; see the [second benchmark section](#benchmark-mechanical-facts-and-the-full-anchor-pool)
+   below.
+
+The lesson running through all three generations: give Jev what it
+cannot compute itself (mechanical consequences, group status), withhold
+what it should judge itself (style directives, position verdicts).
+
 The game is also served from GitHub Pages:
 **https://dagfinndybvig.github.io/Go/** — Jev needs the local proxy
 server and an API key (see Running below). On Pages (or when opening
@@ -260,11 +293,11 @@ shown above the boards.
 
 ### Benchmark
 
-The paired headless benchmark compared the earlier compact `Choice`-only
-prompt against this multi-output candidate scorer. Both cohorts used the
-same reconstructed harness, game rules, local Black heuristic, terminal
-scoring, 600-turn limit, random seeds 1–10, and Jev model release
-`jev-1.13.0`.
+Lukas's paired headless benchmark compared the earlier compact
+`Choice`-only prompt against this multi-output candidate scorer. Both
+cohorts used the same reconstructed harness, game rules, local Black
+heuristic, terminal scoring, 600-turn limit, random seeds 1–10, and Jev
+model release `jev-1.13.0`.
 
 | Approach | Jev wins | Average turns | Jev passes / API calls | Input tokens | Output tokens |
 | --- | ---: | ---: | ---: | ---: | ---: |
