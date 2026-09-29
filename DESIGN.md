@@ -454,6 +454,17 @@ current build's rating against the local pool; future prompt variants
 should be judged by seed-paired p-values at this sample size, not by
 raw win rates at 20 games.
 
+**Timing caveat**: this run predates the simple-ko fix (`174139f`).
+The engine that produced these 160 games did not block immediate ko
+recaptures — `isKo` compared the candidate against the current board,
+which no legal move can equal, so the check never fired — meaning the
+games were played without the simple ko rule the docs described. A
+post-fix confirmation (10 pairs vs `greedy`, seeds 1-10, `jev-1.13.0`,
+`benchmark-results-ko-fix-greedy.jsonl`) scored 16-0-4 with seed-paired
+p = 0.0039, against 14-0-6 (p = 0.021) for the same seeds pre-fix, so
+the headline holds under the corrected rules. The table is kept as
+originally measured; the other anchors have not been re-run post-fix.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,

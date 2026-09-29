@@ -18,7 +18,9 @@ and liberty consequences, ladder-capture warnings, snapback trade
 counts, and whether ataried Black groups can escape. Over the full
 local-anchor benchmark (160 games) this build beats the greedy
 heuristic 26-14 (65%, seed-paired sign test p = 0.0044) and beats
-noisier anchors by more. The local opponent is still deliberately weak
+noisier anchors by more. That run predates the simple-ko fix
+(commit `174139f`); the benchmark section notes a post-fix
+confirmation that preserves the headline. The local opponent is still deliberately weak
 (greedy captures and liberties, no sequence reading), so autoplay is a
 baseline comparison rather than a strong Go exhibition. See the
 approach, replay, and benchmark summary below, and [DESIGN.md](DESIGN.md)
@@ -367,6 +369,15 @@ it. These are local-anchor ratings for this 9x9 ruleset, not human or
 19x19 Go strength. See
 [the full-anchor section](DESIGN.md#full-anchor-benchmark-with-paired-significance-tests)
 and [BENCHMARK.md](BENCHMARK.md).
+
+**Timing caveat** — this 160-game run predates the simple-ko fix
+(commit `174139f`): that engine did not block immediate ko
+recaptures, so its games were played without the simple ko rule the
+docs described. A post-fix confirmation run (10 pairs vs `greedy`,
+seeds 1-10, same `jev-1.13.0`) scored 16-0-4 with seed-paired
+p = 0.0039, so the headline result holds under the corrected rules.
+The table above is kept as originally measured; the other anchors have
+not been re-run post-fix.
 
 ### Benchmark against KataGo
 
