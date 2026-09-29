@@ -86,9 +86,13 @@ There is no test framework. Tests are throwaway Node scripts using
 
 ### Server lifecycle
 
-- `node server.js` serves on port 3000. A second instance fails with
-  `EADDRINUSE` — check `netstat -ano | findstr :3000` and kill the
-  holder (`taskkill /F /PID <pid>`) before starting.
+- `node server.js` serves on port 3000, bound to `127.0.0.1` by default
+  so the LAN cannot reach the `/jev` proxy and spend the server key.
+  `HOST=0.0.0.0 node server.js` deliberately exposes it — keep that an
+  explicit opt-in, don't change the default. `/jev` bodies over 256 KB
+  are refused with `413` (real requests are tens of KB). A second
+  instance fails with `EADDRINUSE` — check `netstat -ano | findstr :3000`
+  and kill the holder (`taskkill /F /PID <pid>`) before starting.
 - Static files are read per request: `jev-go.html` changes need no
   restart; `server.js` changes do.
 - When testing the live API through the proxy, start the server with
@@ -114,9 +118,13 @@ There is no test framework. Tests are throwaway Node scripts using
 
 ### Jev integration invariants
 
-- `lastMove` holds a full board snapshot (for the ko check), not a
-  coordinate. `lastCoord` is the display/state-text coordinate. Keep
-  both updated in `applyMove` and `doPass`.
+- `lastMove` holds the board snapshot from *before* the move just
+  applied (for the ko check), not a coordinate and not the move's result
+  board — the result equals the current board during the next turn,
+  which makes `isKo` a permanent no-op. (This exact bug shipped once and
+  was fixed; don't reintroduce it.) `lastCoord` is the display/state-text
+  coordinate. Keep both updated in `applyMove` and `doPass`;
+  `benchmark.js` mirrors the same semantics in `playGame`.
 - White is Jev when an API key is available (browser key or server
   key). Without a key, White falls back to the local heuristic — the
   game keeps playing. There is no fallback on low confidence or errors:

@@ -182,6 +182,27 @@ lsof -ti :3000 | xargs kill
 instance is still running. Stop it with the commands above, then start
 again.
 
+**Network access** — the server binds to `127.0.0.1` only, so neither
+the game nor the `/jev` proxy (which spends your server-side API key) is
+reachable from the local network. To open the game from another device
+on your network, start it deliberately exposed:
+
+```
+# macOS / Linux
+HOST=0.0.0.0 node server.js
+
+# Windows (cmd.exe)
+set "HOST=0.0.0.0" && node server.js
+
+# Windows (PowerShell)
+$env:HOST="0.0.0.0"; node server.js
+```
+
+The startup banner prints the address it is listening on. The proxy
+also refuses `/jev` request bodies over 256 KB with HTTP `413` (real
+Jev requests are tens of KB), so oversized uploads cannot exhaust
+memory.
+
 **If the server stops mid-game** — Jev's move requests fail and the
 game retries up to 3 times before showing an error; White waits rather
 than falling back to the heuristic (the HUD keeps showing

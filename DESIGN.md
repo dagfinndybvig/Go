@@ -490,6 +490,12 @@ simple-ko rule, implemented as a one-deep positional check. `lastMove`
 holds a full board snapshot (not a coordinate) precisely so this
 comparison is possible; `legalMoves(bd, color, koBoard)` filters ko
 violations the same way when enumerating moves for the AIs.
+`lastMove` stores the board *as it stood before the move just applied*
+(`applyMove` captures the pre-move position), not the move's result
+board — the result equals the current position during the next turn,
+which would make the comparison a permanent no-op. `doPass` clears
+`lastMove` to `null`, lifting the ko restriction after a pass.
+`benchmark.js` keeps the same semantics in its own `playGame` loop.
 
 ### Passing and game end
 
@@ -789,7 +795,11 @@ to `https://api.typesafe.ai/v1/systemone`, forwarding the browser's
 none (a browser key always wins). The server key may come from either
 `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` in the environment or local
 `.env` file. Hidden files are blocked from static requests.
-`GET /jevstatus` reports whether a server-side key is present.
+`GET /jevstatus` reports whether a server-side key is present. The server
+binds to `127.0.0.1` by default so the LAN cannot reach the proxy and
+spend the server key; `HOST=0.0.0.0` opts into LAN exposure deliberately.
+`/jev` request bodies over 256 KB are refused with `413` instead of
+being buffered in memory.
 
 ### Server lifecycle
 
