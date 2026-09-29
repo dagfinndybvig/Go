@@ -269,6 +269,29 @@ lost every stone, and passed out the remaining plies. A style directive
 that raises aggression without adding reading ability was strictly
 harmful; reverted after the run.
 
+#### Position facts experiment
+
+Two mechanical facts were added to the evaluation state, computed by the
+rules engine each turn: groups with 3 or fewer liberties (both colors,
+with stone counts, liberty counts, and atari flags) and capture threats
+(which White stones Black can capture on their reply). Mechanical
+language only — no evaluative framing. Same runner, 5 pairs, seeds 1–5,
+greedy anchor, both resolving to `jev-1.13.0`.
+
+| Variant | Jev W-D-L | Score rate | Mean margin | API calls | Input tokens |
+|---------|-----------|------------|-------------|-----------|--------------|
+| Baseline (no facts) | 3-0-7 | 30.0% | −4.0 | 418 | 1,680,207 |
+| With position facts | 6-0-4 | 60.0% | +4.7 | 416 | 1,681,185 |
+
+The facts doubled the win rate and flipped the mean margin positive at
+identical cost (416 vs 418 calls, same tokens). Jev won 2/5 games as
+Black (0/5 in the baseline), and no game was catastrophic — all margins
+stayed within −8.5 to +18.5, versus the baseline's uniformly losing
+Black games. This is the first intervention that clearly helped, and it
+completes the pattern from the two prior experiments: exact rules-engine
+facts improve play, evaluative framing hurts. The facts block is kept in
+the game.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
@@ -426,10 +449,12 @@ candidate move deltas:
   `A B C D E F G H J` (I omitted), rows bottom-to-top 1–9, and Choice
   names identify board intersections.
 
-This experiment omits the derived territory estimate and group-threat
-scan. Each legal point adds its captured-stone coordinates and the
+Each legal point adds its captured-stone coordinates and the
 resulting liberties of the played White group, so Jev can evaluate the
-counterfactual without receiving 81 full successor boards.
+counterfactual without receiving 81 full successor boards. A mechanical
+facts block follows the board: groups with 3 or fewer liberties (both
+colors, with stone and liberty counts and atari flags) and capture
+threats (which White stones Black can capture on their reply).
 
 #### Candidate move set
 

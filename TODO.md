@@ -16,6 +16,9 @@
       and was reverted.
 - [x] Test a high-aggression style directive in the instructions: 0-10,
       Jev lost every stone in every game (see DESIGN.md); reverted.
+- [x] Add mechanical position facts to the state (weak-group scan +
+      capture threats): 3-0-7 → 6-0-4 over paired seeds at identical
+      cost; kept (see DESIGN.md).
 
 ## Next steps
 

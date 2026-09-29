@@ -211,6 +211,37 @@ const Jev = (() => {
     ].join('\n');
   }
 
+  // Mechanical position facts: groups with few liberties, and what the
+  // opponent can capture on their reply. Rules-engine output only — no
+  // evaluative language.
+  function buildFacts() {
+    const lines = [];
+    const seen = new Set();
+    const weak = [];
+    for (let y = 0; y < N; y++)
+      for (let x = 0; x < N; x++) {
+        if (board[y][x] === EMPTY || seen.has(x + ',' + y)) continue;
+        const g = groupAndLiberties(board, x, y);
+        for (const [gx, gy] of g.group) seen.add(gx + ',' + gy);
+        if (g.libs <= 3) {
+          weak.push('- ' + (board[y][x] === WHITE ? 'White' : 'Black') + ' group at ' + coordName(x, y) +
+            ' (' + g.group.length + ' stones): ' + g.libs + ' liberties' + (g.libs === 1 ? ' (in atari)' : ''));
+        }
+      }
+    if (weak.length) lines.push('Groups with 3 or fewer liberties:', ...weak);
+    const threats = legalMoves(board, BLACK, lastMove).filter(m => m.captured > 0);
+    if (threats.length) {
+      const points = new Set();
+      let total = 0;
+      for (const t of threats)
+        for (let y = 0; y < N; y++)
+          for (let x = 0; x < N; x++)
+            if (board[y][x] === WHITE && t.board[y][x] === EMPTY) { points.add(coordName(x, y)); total++; }
+      lines.push('Capture threats: if White passes, Black can capture White stones at ' + [...points].join(', ') + ' (' + total + ' stones).');
+    }
+    return lines.join('\n');
+  }
+
   function buildEvaluationState(moves) {
     const effects = moves.map(m => {
       const captured = [];
@@ -223,6 +254,7 @@ const Jev = (() => {
     });
     return [
       buildState(),
+      buildFacts(),
       'Move quality scale: 0=major blunder, 1=poor, 2=playable, 3=good, 4=excellent. Judge from White’s perspective; consider tactics, group safety, territory, and the whole position.',
       'Each point outcome below is the exact rules-engine delta from the board above: place White at the named point and remove the listed captured Black stones.',
       'Candidate point outcomes:',

@@ -163,7 +163,10 @@ pass count, last moves, komi, and a coordinate legend. Columns are
 `A B C D E F G H J` (Go omits I); rows are numbered 1–9 from bottom to
 top. It also lists every legal point's exact immediate rules-engine
 effects: which Black stones it captures and how many liberties White's
-resulting connected group has. The legal move set is complete (up to 81
+resulting connected group has. A mechanical facts block follows the
+board: groups with 3 or fewer liberties (both colors) and capture
+threats — which White stones Black could capture on their reply. The
+legal move set is complete (up to 81
 points) plus `pass`.
 
 The request's `questions` object asks for three kinds of typed output:
