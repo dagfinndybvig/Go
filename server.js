@@ -8,6 +8,12 @@ const fs = require("fs");
 const path = require("path");
 
 const PORT = 3000;
+// Loopback by default so the LAN cannot reach the /jev proxy and spend the
+// server-side API key. Set HOST=0.0.0.0 to opt into LAN exposure.
+const HOST = process.env.HOST || "127.0.0.1";
+// Jev requests are tens of KB (state text plus up to ~84 questions); anything
+// larger is not a game move, so refuse instead of buffering it.
+const MAX_PROXY_BODY = 262144; // 256 KB
 const TS_HOST = "api.typesafe.ai";
 const TS_PATH = "/v1/systemone";
 
@@ -74,8 +80,20 @@ function serveStatic(req, res) {
 
 function proxyJev(req, res) {
   const chunks = [];
-  req.on("data", (c) => chunks.push(c));
+  let size = 0;
+  let tooLarge = false;
+  req.on("data", (c) => {
+    if (tooLarge) return; // keep draining, but stop buffering
+    size += c.length;
+    if (size > MAX_PROXY_BODY) { tooLarge = true; chunks.length = 0; return; }
+    chunks.push(c);
+  });
   req.on("end", () => {
+    if (tooLarge) {
+      res.writeHead(413, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "payload_too_large", limitBytes: MAX_PROXY_BODY }));
+      return;
+    }
     const body = Buffer.concat(chunks);
     const headers = {
       "Content-Type": "application/json",
@@ -113,9 +131,10 @@ const server = http.createServer((req, res) => {
   return serveStatic(req, res);
 });
 
-server.listen(PORT, () => {
+server.listen(PORT, HOST, () => {
   console.log("Jev Go");
   console.log("Open http://localhost:" + PORT);
   console.log("Jev proxy: POST /jev -> https://" + TS_HOST + TS_PATH);
   console.log("Server-side key: " + (ENV_KEY ? "yes (TYPESAFE_API_KEY)" : "no"));
+  console.log("Listening on " + HOST + " (set HOST=0.0.0.0 for LAN access)");
 });
