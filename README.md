@@ -31,7 +31,7 @@ A short recap of the rules of Go, with links for learning more, is in
 
 ## The takeaway
 
-The three generations below tell one story. Dagfinn Dybvig started a naive attempt to let Jev play Go without any special training or programming. Lukas Mosser's rebuild — per-move
+Dagfinn Dybvig started a naive attempt to let Jev play Go without any special training or programming. Lukas Mosser's rebuild — per-move
 Scores plus a Choice prior plus a Noul pass gate — is the architecture
 every later result lives inside; nothing since has replaced it. The
 mechanical-facts generation of the final version made it stronger by supplying what Jev
