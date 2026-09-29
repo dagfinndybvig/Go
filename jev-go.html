@@ -531,9 +531,10 @@ function labels() {
 
 function applyMove(m, color) {
   history.push({ board, captures: { ...captures }, lastMove, passes });
+  const prevBoard = board; // position before this move, for the next player's ko check
   board = m.board;
   captures[color] += m.captured;
-  lastMove = m.board;
+  lastMove = prevBoard;
   lastCoord = { x: m.x, y: m.y };
   passes = 0;
   turn = color === BLACK ? WHITE : BLACK;

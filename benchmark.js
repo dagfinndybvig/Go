@@ -645,9 +645,9 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
       state.lastCoord = null;
     } else {
       const move = decision.move;
+      state.lastMove = copyBoard(state.board); // position before this move, for the ko check
       state.board = copyBoard(move.board);
       state.captures[color] += move.captured;
-      state.lastMove = copyBoard(move.board);
       state.lastCoord = { x: move.x, y: move.y };
       state.passes = 0;
     }
