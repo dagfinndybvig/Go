@@ -70,7 +70,9 @@ previous one:
    below. KataGo judged none of these steps — it was not installed on
    the measurement machine, so every fact was kept or dropped on local
    anchors alone; the [external evaluation](#benchmark-against-katago)
-   came after the generation was finished.
+   came after the generation was finished, and put the gains in
+   perspective: 1-19 against KataGo's 5-kyu profile, so the facts
+   generation's improvements are relative, not absolute.
 
 The lesson running through all three generations: give Jev what it
 cannot compute itself (mechanical consequences, group status), withhold
