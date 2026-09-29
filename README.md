@@ -381,6 +381,20 @@ not been re-run post-fix.
 
 ### Benchmark against KataGo
 
+[KataGo](https://github.com/lightvector/KataGo) is the strongest
+open-source Go engine — at full strength it plays far above any human.
+It also ships a *human-SL* model: a network trained to imitate human
+play, which can be pinned to a labeled rank. The runner pins it to
+`rank_5k`, roughly a 5-kyu human, driven over GTP at one visit and
+full temperature — the configuration KataGo documents for imitating a
+rank profile. Lukas built this anchor into the benchmark runner
+(commit `aef43a7`), and it is the one opponent not defined by this
+repo's own heuristics: the local anchors only say "better or worse
+than the greedy heuristic," while the `rank_5k` profile is an external
+reference point of approximate human strength. It is a model-labeled
+profile, not a calibrated Elo — see the caveats in
+[BENCHMARK.md](BENCHMARK.md).
+
 On macOS, install KataGo and download its human-SL model once:
 
 ```sh
