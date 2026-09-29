@@ -12,13 +12,17 @@ no key is set).
 Jev is a general-purpose decision model, not a dedicated Go engine. The
 current experiment asks it to score each legal move and combines those
 scores with a move-choice prior and a separate pass judgment. It still
-does no tree search or playouts, and its move evaluation can miss tactical
-sequences: in the ten-game benchmark it won nine games, but one tactical
-failure let Black capture 41 stones. The local opponent is also deliberately
-weak (greedy captures and liberties, no sequence reading), so autoplay is a
-baseline comparison rather than a strong Go exhibition. See the approach,
-replay, and benchmark summary below, and [DESIGN.md](DESIGN.md) for the
-experiment history and per-seed results.
+does no tree search or playouts, so the game compensates with mechanical
+facts computed by the rules engine: each candidate move's exact capture
+and liberty consequences, ladder-capture warnings, snapback trade
+counts, and whether ataried Black groups can escape. Over the full
+local-anchor benchmark (160 games) this build beats the greedy
+heuristic 26-14 (65%, seed-paired sign test p = 0.0044) and beats
+noisier anchors by more. The local opponent is still deliberately weak
+(greedy captures and liberties, no sequence reading), so autoplay is a
+baseline comparison rather than a strong Go exhibition. See the
+approach, replay, and benchmark summary below, and [DESIGN.md](DESIGN.md)
+for the experiment history and per-seed results.
 
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
@@ -163,10 +167,16 @@ pass count, last moves, komi, and a coordinate legend. Columns are
 `A B C D E F G H J` (Go omits I); rows are numbered 1–9 from bottom to
 top. It also lists every legal point's exact immediate rules-engine
 effects: which Black stones it captures and how many liberties White's
-resulting connected group has. A mechanical facts block follows the
-board: groups with 3 or fewer liberties (both colors) and capture
-threats — which White stones Black could capture on their reply. The
-legal move set is complete (up to 81
+resulting connected group has. When the played group would be left in
+atari, or in atari-after-extension that a ladder captures, the point's
+line carries a mechanical warning; when the move captures stones and
+the played group is still left with one liberty, the line states both
+counts (the snapback trade). Moves that atari or ladder-catch a Black
+group report whether Black can save it ("cannot extend", "caught in a
+ladder even if Black extends", "can escape by extending"). A mechanical
+facts block follows the board: groups with 3 or fewer liberties (both
+colors) and capture threats — which White stones Black could capture on
+their reply. The legal move set is complete (up to 81
 points) plus `pass`.
 
 The request's `questions` object asks for three kinds of typed output:
@@ -270,6 +280,39 @@ a weak local baseline, not evidence of general Go strength. See the
 [full per-seed table and experiment notes](DESIGN.md#ten-game-paired-comparison)
 for details and limitations. The color-balanced Elo runner and opponent
 anchor definitions are documented in [BENCHMARK.md](BENCHMARK.md).
+
+### Benchmark: mechanical facts and the full anchor pool
+
+Since that comparison, the state gained mechanical facts computed by the
+rules engine — weak-group scan, capture threats, ladder warnings,
+snapback trade counts, and Black-group fate reports. Each step was
+measured with paired, color-balanced games (see
+[DESIGN.md](DESIGN.md) for every table). The consistent pattern: facts
+help, one-sided style directives hurt both ways, and verdicts about the
+position hurt most. The facts trade a little raw win rate for the
+near-elimination of catastrophic collapses (worst loss −86.5 → −18.5
+over 20-game runs).
+
+The current build then ran the full local-anchor standard: 20
+color-balanced pairs against each of `greedy`, `noise25`, `noise50`,
+and `random` — 160 games, `jev-1.13.0`. The runner reports exact
+two-sided sign tests, including a seed-paired test that counts each
+Jev-Black + Jev-White pair by the sign of its combined margin, which
+cancels the color advantage.
+
+| Anchor | Jev W-D-L | Score rate | Elo Δ [95% approx] | Mean margin | Seed-paired p |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| local-greedy | 26-0-14 | 65.0% | +108 [−3 to 219] | +17.6 | 0.0044 |
+| greedy + 25% random | 30-0-10 | 75.0% | +191 [69 to 313] | +37.4 | 0.0004 |
+| greedy + 50% random | 35-0-5 | 87.5% | +338 [181 to 495] | +54.5 | <0.0001 |
+| uniform random | 40-0-0 | 100.0% | +∞ [407 to ∞] | +81.0 | <0.0001 |
+
+Against `greedy` the raw record alone (p = 0.081) is indistinguishable
+from a coin flip at 40 games; the color-balanced pairs (16-3) resolve
+it. These are local-anchor ratings for this 9x9 ruleset, not human or
+19x19 Go strength. See
+[the full-anchor section](DESIGN.md#full-anchor-benchmark-with-paired-significance-tests)
+and [BENCHMARK.md](BENCHMARK.md).
 
 ### Benchmark against KataGo
 

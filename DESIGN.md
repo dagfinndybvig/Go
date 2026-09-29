@@ -48,10 +48,16 @@ In earlier Go runs with tactical annotations, Jev's play showed three patterns:
   high-confidence picks are almost always captures or atari saves.
 
 The earlier prompt included a mid-game territory estimate, group-in-danger
-scan, and 1-ply heuristic lookahead in each move description. The current
-compact-input experiment removes those derived annotations to measure
+scan, and 1-ply heuristic lookahead in each move description. The
+compact-input experiment removed those derived annotations and measured
 whether Jev does better with the board, concise metadata, and bare legal
-move coordinates.
+move coordinates — it did, and that shape is the basis of every variant
+since. The experiments that follow then added mechanical facts back, but
+computed by the rules engine from the current position rather than
+hand-derived annotations, and measured each step with paired
+color-balanced games. The working rule that emerged: give Jev what it
+cannot compute itself (mechanical consequences, group status), withhold
+what it should judge itself (style, weighting, position verdicts).
 
 #### Original 30-candidate benchmark
 
@@ -610,7 +616,8 @@ resulting liberties of the played White group, so Jev can evaluate the
 counterfactual without receiving 81 full successor boards. When the
 played group would be left in atari, or in atari-after-extension that a
 ladder captures, the point's line carries a mechanical warning ("Black
-captures the group (N stones) next turn" / "in a ladder"); when the
+captures the group (N stones) next turn" / "Black captures the group in
+a ladder (N stones)"); when the
 move captures stones and the played group is still left with one
 liberty, the line states both counts so Jev can judge the snapback
 trade itself. Moves that atari or ladder-catch a Black group carry the

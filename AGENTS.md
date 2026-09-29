@@ -46,6 +46,13 @@ There is no test framework. Tests are throwaway Node scripts using
   properties (only `function` declarations do). Append an export shim:
   `script + '\n;globalThis.__x = { humanPlay, getBoard: () => board };'`
   (getters for anything reassigned, like `board`).
+- Functions inside the Jev IIFE (`blackGroupFate`, `ladderCaptured`,
+  `buildEvaluationState`, `coordName`) are not top-level either. Expose
+  them by injecting a line before the IIFE's return anchor:
+  `script.replace('return {\n    chooseMove,', 'globalThis.__jev = { blackGroupFate, ladderCaptured, buildEvaluationState, coordName };\n  return {\n    chooseMove,')`.
+- The script needs `location` in the sandbox (`location.hostname`), and
+  `draw()` calls every canvas 2d method — stub `getContext` with a
+  Proxy that returns no-op functions.
 - The DOM stub does not parse HTML. Static markup (e.g. the modes panel
   text) is invisible to tests — only assert on what JS writes via
   `textContent`.
@@ -127,11 +134,30 @@ There is no test framework. Tests are throwaway Node scripts using
   explicit coordinate legend. Candidate scoring adds exact capture and
   resulting-liberty annotations to the state, plus one Score per legal
   point/pass and a Noul pass gate.
+- Mechanical facts are rules-engine output only — no evaluative
+  language. Per candidate point: a warning when the played group is
+  left with 1 liberty ("Black captures/recaptures the group (N stones)
+  next turn"; the recapture variant states both counts so Jev judges
+  the snapback trade), a warning when 2 liberties and
+  `ladderCaptured()` says the ladder dies, and a Black-group fate
+  report from `blackGroupFate()` ("cannot extend (White captures it
+  next turn)" / "caught in a ladder even if Black extends" / "can
+  escape by extending") for Black groups reduced to <=2 liberties.
+  `blackGroupFate` simulates Black's saving extension and withholds a
+  claim when the extension gains 3+ liberties; fate facts are
+  suppressed when the played White group is itself in atari. Keep new
+  facts mechanical — one-sided directives and position verdicts
+  measurably hurt (see DESIGN.md).
 
 - The benchmark runner keeps Jev player-relative: when Jev plays actual
   Black, the benchmark swaps board colors and capture counts before asking
   the same White-oriented prompt. Keep color-swapped games paired by seed,
   and record the resolved model version and anchor name for every game.
+  The summary reports exact two-sided sign tests per opponent: a
+  per-game test on the win/loss record and a stricter seed-paired test
+  (each pair counted by the sign of its combined margin, which cancels
+  the color advantage). Judge prompt variants by the seed-paired
+  p-value, not raw win rates.
 
 - For the optional KataGo anchor, `genmove` advances KataGo's GTP board itself;
   only send GTP `play` commands for Jev's moves. Reset board size, komi, rules,

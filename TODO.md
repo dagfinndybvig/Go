@@ -40,6 +40,11 @@
 
 ## Next steps
 
+- [ ] Extend `blackGroupFate` to evaluate 3+ liberty post-extension
+      groups (longer capturing races) — currently no claim is made
+      there; judge by seed-paired p at 40 games.
+- [ ] Install KataGo on Windows (binary + human-SL model) and run the
+      `katago-5k` anchor for an external labeled comparison.
 - [ ] Save position-level traces and terminal area margins before trying
       DSPy/ReAnchor calibration.
 
