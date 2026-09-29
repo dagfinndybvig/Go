@@ -399,7 +399,9 @@ node benchmark.js --pairs 10 --opponents katago-5k
 
 The runner uses the installed Homebrew model/config, 9×9, 5.5 komi, Chinese
 rules, one visit, and temperature 1. Results go to an ignored JSONL file and
-include model hashes and per-game color/results. See [the benchmark guide](BENCHMARK.md)
+include model hashes and per-game color/results; a sibling `.traces.jsonl`
+file records every position, Jev's per-candidate scores, and the terminal
+area ownership map. See [the benchmark guide](BENCHMARK.md)
 for alternate opponents, path overrides, and rating caveats.
 
 Press **L** in-game to watch the decisions live. In the browser console,

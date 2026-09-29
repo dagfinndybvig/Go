@@ -46,6 +46,30 @@ and are written to a unique `benchmark-results-*.jsonl` file (ignored by Git). U
 color, result, score margin, captures, passes, API calls, token usage, and
 resolved model name.
 
+### Trace output
+
+Every run also writes `<output>.traces.jsonl` (same default naming), one JSON
+line per ply of every game:
+
+- `type: "position"` entries carry the game id (`opponent:seed:jevColor`),
+  ply number, side to move, the pre-move board (row-major flat array of 81
+  ints, `board[y * 9 + x]`), the ko snapshot (`null` after a pass), captures,
+  consecutive passes, legal-move count, and the chosen move (`pass`, a
+  coordinate, or `resign`). Jev's own plies additionally carry `jev`: the
+  picked move, the raw Choice answer, confidence, choice probabilities, the
+  Noul pass-gate probability, whether the pass gate allowed passing, and the
+  per-candidate Scores.
+- `type: "terminal"` entries (one per game) carry the final board, the
+  per-point area ownership map (`0` neutral, `1` Black, `2` White; stones
+  count as their color, an empty region as the sole color it touches), the
+  final scores, Jev's margin, the result, and how the game ended. Ownership
+  counts plus komi reproduce `blackScore`/`whiteScore` exactly.
+
+The traces are the raw material for later value-function or prompt
+calibration (DSPy/ReAnchor): every position is self-contained enough to
+re-enumerate legal moves, and each carries the decision that was actually
+taken together with the game's terminal outcome.
+
 ### KataGo setup
 
 Install KataGo and place its official human-SL model at

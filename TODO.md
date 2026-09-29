@@ -45,8 +45,12 @@
       there; judge by seed-paired p at 40 games.
 - [ ] Install KataGo on Windows (binary + human-SL model) and run the
       `katago-5k` anchor for an external labeled comparison.
-- [ ] Save position-level traces and terminal area margins before trying
-      DSPy/ReAnchor calibration.
+- [x] Save position-level traces and terminal area margins: `benchmark.js`
+      writes `<output>.traces.jsonl` — one entry per ply (pre-move board, ko
+      snapshot, captures, legal count, chosen move, and Jev's scores/
+      probabilities on its own plies) plus a terminal entry with the
+      per-point area ownership map and final margins; groundwork for
+      DSPy/ReAnchor calibration (validated over a 2-game smoke run).
 
 ## Done (pushed)
 

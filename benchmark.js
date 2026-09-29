@@ -60,7 +60,9 @@ Options:
   --opponents LIST          Comma-separated: choice-only,greedy,noise25,
                             noise50,random,katago-5k (default: ${DEFAULT_OPPONENTS.join(',')})
   --max-turns N             Ply cap per game (default: 600)
-  --output FILE             Write per-game JSONL (default: unique timestamped file)
+  --output FILE             Write per-game JSONL (default: unique timestamped file);
+                            position traces and terminal area margins go to
+                            <output>.traces.jsonl
   --katago-bin PATH         KataGo executable (default: KATAGO_BIN or katago)
   --katago-model PATH       KataGo's normal model (default: Homebrew b18 model)
   --katago-human-model PATH Human-SL model (default: KATAGO_HUMAN_MODEL or ~/.local/share/katago/models)
@@ -376,6 +378,40 @@ function scoreArea(board, komi = 5.5) {
   };
 }
 
+// Per-point area ownership at game end, row-major flat array: stones belong
+// to their color, an empty region belongs to the sole color it touches,
+// otherwise 0 (neutral). Sums match scoreArea without komi.
+function areaOwnerMap(board) {
+  const n = board.length;
+  const owner = Array.from({ length: n * n }, () => 0);
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) owner[y * n + x] = board[y][x];
+  const seen = new Set();
+  for (let y = 0; y < n; y++)
+    for (let x = 0; x < n; x++) {
+      if (board[y][x] !== 0 || seen.has(x + ',' + y)) continue;
+      const region = [], stack = [[x, y]], borders = new Set();
+      seen.add(x + ',' + y);
+      while (stack.length) {
+        const [cx, cy] = stack.pop();
+        region.push([cx, cy]);
+        for (const [nx, ny] of [[cx - 1, cy], [cx + 1, cy], [cx, cy - 1], [cx, cy + 1]]) {
+          if (nx < 0 || nx >= n || ny < 0 || ny >= n) continue;
+          const neighbor = board[ny][nx];
+          if (neighbor === 0) {
+            const next = nx + ',' + ny;
+            if (!seen.has(next)) { seen.add(next); stack.push([nx, ny]); }
+          } else borders.add(neighbor);
+        }
+      }
+      if (borders.size === 1) {
+        const ownerColor = [...borders][0];
+        for (const [rx, ry] of region) owner[ry * n + rx] = ownerColor;
+      }
+    }
+  return owner;
+}
+
 function mulberry32(seed) {
   let state = seed >>> 0;
   return () => {
@@ -582,7 +618,7 @@ async function chooseCompactChoiceJev(runtime, state, legal, color, ownLastMove)
   return { move: found };
 }
 
-async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
+async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, traceEntries) {
   const e = runtime.engine;
   if (opponent.kind === 'katago') await kataGo.newGame();
   let state = {
@@ -591,13 +627,14 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
     passes: 0, turn: e.BLACK, gameOver: false,
   };
   const colors = { jev: jevColor, opponent: jevColor === e.BLACK ? e.WHITE : e.BLACK };
+  const gameId = opponent.id + ':' + seed + ':' + (jevColor === e.BLACK ? 'black' : 'white');
   const randomByPlayer = {
     jev: mulberry32((seed ^ hashText('jev')) >>> 0),
     [opponent.id]: mulberry32((seed ^ hashText(opponent.id)) >>> 0),
   };
   const lastMoveByPlayer = { jev: null, [opponent.id]: null };
   const passCounts = { 1: 0, 2: 0 };
-  let turns = 0, finished = false, resignedBy = null;
+  let turns = 0, finished = false, resignedBy = null, jevDecisionMade = false;
   runtime.resetApiRequests();
   runtime.resetApiUsage();
   e.Jev.clearLog();
@@ -614,6 +651,7 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
     else if (actor.kind === 'score') {
       runtime.setRandom(randomByPlayer[actor.id]);
       decision = await chooseScoringJev(runtime, state, legal, color, lastMoveByPlayer[actor.id]);
+      jevDecisionMade = true;
     } else if (actor.kind === 'choice-only') {
       runtime.setRandom(randomByPlayer[actor.id]);
       decision = await chooseCompactChoiceJev(runtime, state, legal, color, lastMoveByPlayer[actor.id]);
@@ -634,6 +672,34 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
     if (opponent.kind === 'katago' && actor.kind !== 'katago') {
       await kataGo.play(color, decision.pass ? 'pass' : e.coordName(decision.move.x, decision.move.y));
     }
+    const entry = {
+      type: 'position',
+      game: gameId,
+      ply: turns + 1,
+      color: color === e.BLACK ? 'black' : 'white',
+      board: state.board.flat(),
+      ko: state.lastMove ? state.lastMove.flat() : null,
+      captures: { ...state.captures },
+      passes: state.passes,
+      legalCount: legal.length,
+      move: decision.resign ? 'resign' : decision.pass ? 'pass' : e.coordName(decision.move.x, decision.move.y),
+    };
+    if (jevDecisionMade) {
+      const last = e.Jev.getLog().at(-1);
+      if (last && last.ok) {
+        entry.jev = {
+          choice: last.choice,
+          jevChoice: last.jevChoice,
+          confidence: last.confidence,
+          probabilities: last.probabilities,
+          passProbability: last.passProbability,
+          passAllowed: last.passAllowed,
+          scores: last.scores,
+        };
+      }
+      jevDecisionMade = false;
+    }
+    traceEntries.push(entry);
     if (decision.resign) { resignedBy = color; break; }
     if (actor.kind === 'score' || actor.kind === 'choice-only') {
       lastMoveByPlayer[actor.id] = decision.pass ? null : e.coordName(decision.move.x, decision.move.y);
@@ -662,6 +728,19 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo) {
     ? resignedBy !== jevColor
     : jevScore > opponentScore;
   const draw = resignedBy == null && jevScore === opponentScore;
+  traceEntries.push({
+    type: 'terminal',
+    game: gameId,
+    plies: turns,
+    board: state.board.flat(),
+    areaOwner: areaOwnerMap(state.board),
+    blackScore: finalScore.black,
+    whiteScore: finalScore.white,
+    jevMargin: jevScore - opponentScore,
+    result: draw ? 'draw' : jevWon ? 'win' : 'loss',
+    terminal: resignedBy != null ? 'opponent resigned' : finished ? 'two passes' : 'turn cap',
+    resignedBy: resignedBy == null ? null : resignedBy === e.BLACK ? 'black' : 'white',
+  });
   const log = e.Jev.getLog();
   const usageEvents = [
     ...log.map(item => ({ model: item.model, usage: item.usage })),
@@ -714,7 +793,9 @@ async function main() {
   const runtime = loadGame(apiKey);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outputPath = path.resolve(ROOT, options.output || ('benchmark-results-' + stamp + '.jsonl'));
+  const tracePath = outputPath.replace(/\.jsonl$/, '') + '.traces.jsonl';
   fs.writeFileSync(outputPath, '', { flag: 'wx' });
+  fs.writeFileSync(tracePath, '', { flag: 'wx' });
   const kataGo = options.opponents.includes('katago-5k') ? await startKataGo(options) : null;
   if (kataGo) console.log('KataGo anchor: ' + kataGo.metadata.version + ', ' + kataGo.metadata.profile + ', ' + kataGo.metadata.rules + ', komi ' + kataGo.metadata.komi);
   const records = [];
@@ -725,10 +806,12 @@ async function main() {
       for (let pair = 0; pair < options.pairs; pair++) {
         const seed = options.seed + pair;
         for (const jevColor of [runtime.engine.BLACK, runtime.engine.WHITE]) {
-          const record = await playGame(runtime, opponent, jevColor, seed, options.maxTurns, kataGo);
+          const traceEntries = [];
+          const record = await playGame(runtime, opponent, jevColor, seed, options.maxTurns, kataGo, traceEntries);
           record.pair = opponent.id + ':' + seed;
           records.push(record);
           fs.appendFileSync(outputPath, JSON.stringify(record) + '\n');
+          for (const traceEntry of traceEntries) fs.appendFileSync(tracePath, JSON.stringify(traceEntry) + '\n');
           gameNumber++;
           console.log(
             '[' + gameNumber + '] Jev ' + record.jevColor + ' vs ' + opponent.id + ': ' +
@@ -760,6 +843,7 @@ async function main() {
     );
   }
   console.log('\nSaved per-game records to ' + path.relative(ROOT, outputPath));
+  console.log('Saved position traces and terminal area margins to ' + path.relative(ROOT, tracePath));
   console.log('Elo values are head-to-head differences against each named opponent. local-greedy = 1000 only when that anchor is included.');
 }
 
