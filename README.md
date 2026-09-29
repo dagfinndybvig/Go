@@ -56,7 +56,7 @@ previous one:
    description. Measured against the local greedy heuristic in
    autoplay, it lost all three games — the heuristic captured every
    stone.
-2. **Lukas's rebuild** (commits `a510643`–`aef43a7`, from
+2. **Lukas Mosser's rebuild** (commits `a510643`–`aef43a7`, from
    [his fork's main branch](https://github.com/LukasMosser/Go)): stripped
    the prompt to the compact board plus the complete legal move list,
    added per-move `Score` outputs with a `Choice` prior and a `Noul`
@@ -414,8 +414,9 @@ reference point of approximate human strength. It is a model-labeled
 profile, not a calibrated Elo — see the caveats in
 [BENCHMARK.md](BENCHMARK.md).
 
-In the project's evolution KataGo played three roles. Lukas defined it
-as an anchor in generation 2 and used it once, as a two-game pilot
+In the project's evolution KataGo played three roles. Lukas Mosser
+defined it as an anchor in generation 2 and used it once, as a two-game
+pilot
 (−28.5, −53.5) that validated the engine integration and color swap.
 It judged nothing in generation 3: every mechanical-facts variant was
 kept or dropped on local anchors alone. And after generation 3 and the
@@ -509,3 +510,16 @@ index.html    — redirect to jev-go.html, so GitHub Pages serves the game
 The game logic (groups, liberties, captures, ko, scoring) is pure
 functions over a 9x9 array; the Jev integration mirrors the pattern used
 in [Fight](https://github.com/dagfinndybvig/Fight).
+
+## Credits
+
+The generation 2 rebuild — the multi-output move scoring (a `Score` per
+candidate plus a `Choice` prior and a `Noul` pass gate), the compact
+prompt, the color-balanced benchmark runner with its opponent anchors
+including the KataGo human-SL profile — was designed and implemented by
+[Lukas Mosser](https://github.com/LukasMosser) in
+[his fork](https://github.com/LukasMosser/Go) (commits `a510643`–`aef43a7`).
+Every later result in this repository is built inside his architecture,
+and his benchmark is the instrument that measured them — including the
+ones that outperformed his own build. The first naive version (generation
+1) was built by [Dagfinn Dybvig](https://github.com/dagfinndybvig).
