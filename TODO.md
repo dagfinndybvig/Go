@@ -33,6 +33,10 @@
       rate within noise (12-0-8 over 20 games) but worst loss
       −35.5 → −18.5, mean margin +6.9 → +11.8, catastrophic losses
       2 → 1; kept (see DESIGN.md).
+- [x] Add exact sign tests (per-game and seed-paired) to the benchmark
+      summary; run the full local-anchor standard (160 games): Jev
+      beats all four anchors, seed-paired p = 0.0044 vs greedy where
+      the raw record is not significant (see DESIGN.md).
 
 ## Next steps
 

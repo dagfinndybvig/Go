@@ -419,6 +419,35 @@ noise), while every loss metric improved monotonically: worst loss
 +1.9 → +6.9 → +11.8. The facts trade a little win rate for the
 near-elimination of the catastrophic collapse. Kept.
 
+#### Full-anchor benchmark with paired significance tests
+
+The runner's summary now reports two exact two-sided sign tests: a
+per-game test on the win/loss record (draws excluded) and a stricter
+seed-paired test — each pair is one Jev-Black and one Jev-White game
+against the same seed, counted by the sign of the pair's combined
+margin, which cancels the color advantage. The current build (all
+facts) then ran Lukas's full local-anchor standard: 20 color-balanced
+pairs against each of `greedy`, `noise25`, `noise50`, and `random`
+(160 games, seeds 1–20, `jev-1.13.0`). The KataGo anchor was not run —
+KataGo is not installed on this machine.
+
+| Anchor | Jev W-D-L | Score rate | Elo Δ [95% approx] | Mean margin | Sign p | Seed-paired p |
+|--------|-----------|------------|---------------------|-------------|--------|---------------|
+| local-greedy | 26-0-14 | 65.0% | +108 [−3 to 219] | +17.6 | 0.081 | 0.0044 |
+| greedy + 25% random | 30-0-10 | 75.0% | +191 [69 to 313] | +37.4 | 0.0022 | 0.0004 |
+| greedy + 50% random | 35-0-5 | 87.5% | +338 [181 to 495] | +54.5 | <0.0001 | <0.0001 |
+| uniform random | 40-0-0 | 100.0% | +∞ [407 to ∞] | +81.0 | <0.0001 | <0.0001 |
+
+The seed-paired test is the one that matters, and it resolves what the
+per-game test could not: against `greedy`, the raw record (26-14,
+p = 0.081) looks like a coin flip at 40 games, but the color-balanced
+pairs are 16-3 (p = 0.0044) — Jev's advantage is real once the color
+split is cancelled. The strength gradient against the noise anchors is
+monotonic and highly significant, as it should be. This establishes the
+current build's rating against the local pool; future prompt variants
+should be judged by seed-paired p-values at this sample size, not by
+raw win rates at 20 games.
+
 ## Rules implementation
 
 The board is a 9x9 array, `board[y][x]`, with `EMPTY = 0`, `BLACK = 1`,
