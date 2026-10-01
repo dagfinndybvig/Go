@@ -1,5 +1,9 @@
 # TODO
 
+The original development and historical benchmark experiments below used
+TypeSafe Jev. Ollama was added later as an accessible local/no-key option;
+both backends remain supported.
+
 ## Local Ollama decision backend
 
 - [x] Make Ollama the recommended no-key runtime, with explicit-model

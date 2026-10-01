@@ -13,6 +13,12 @@ color-balanced rating matches against fixed opponent anchors. See
 OLLAMA.md for local-model setup, DESIGN.md for architecture, and
 README.md for usage.
 
+Present both supported backends clearly: Ollama is the accessible
+local/no-key option; TypeSafe Jev is the original backend used to develop
+the project. Attribute published development benchmarks and the replay
+to TypeSafe, not Ollama/Nimble. New cross-model results must state their
+policy and method; default backend policies are not the same.
+
 ## Gotchas
 
 ### CRLF vs LF (the big one)

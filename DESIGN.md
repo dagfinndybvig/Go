@@ -3,8 +3,16 @@
 Detailed design notes for *Jev Go*, a 9x9 Go game whose White stones are
 played by a local [Ollama](https://ollama.com) decision model or
 [Jev](https://www.typesafe.ai), TypeSafe AI's cloud "System One" model.
-Ollama is the recommended local runtime because it needs no API key and
-keeps positions on the configured host.
+Ollama provides an accessible local option without an API key and keeps
+positions on the configured host. TypeSafe Jev remains the original,
+fully supported cloud backend.
+
+**Development and benchmark provenance:** this project was originally
+developed with TypeSafe Jev. The prompt evolution, mechanical-fact
+experiments, and historical benchmark tables in this document describe
+that TypeSafe work, not Nimble. Ollama support and its lighter tournament
+policy were added afterward. Historical scores are not transferable
+between models or policies.
 
 ## Overview
 

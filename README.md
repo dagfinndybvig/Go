@@ -2,20 +2,26 @@
 
 # Jev Go
 
-A small 9x9 Go game where the White stones are played by a typed
-decision model: [Jev](https://www.typesafe.ai), TypeSafe AI's
-"System One" API, or a compatible local model through
-[Ollama](https://ollama.com). Without either backend, White falls back
-to a built-in local heuristic AI. You play Black. In autoplay mode, the
-local heuristic drives Black against the decision model's White (or
-against itself when no backend is available).
+A small 9x9 Go game that supports **both local models through
+[Ollama](https://ollama.com) and [TypeSafe Jev](https://www.typesafe.ai)**.
+You play Black; the selected decision model plays White. Without either
+backend, White uses a built-in local heuristic. Autoplay lets the local
+heuristic play Black against White.
 
-**Recommended setup:** install [Ollama](https://ollama.com), run
+**Originally developed with TypeSafe.** The game, its prompts, mechanical
+facts, and scoring experiments were developed using TypeSafe's Jev
+"System One" API. The published development benchmarks and replay below
+come from that TypeSafe work—not from Nimble or another Ollama model.
+TypeSafe remains fully supported as the original backend.
+
+**Accessible local option:** Ollama support was added so the project can
+also be tried without a TypeSafe account or API key, on hardware capable
+of running the selected model. Install [Ollama](https://ollama.com), run
 `ollama pull nimble:latest`, create the 16K `nimble-go` variant in
 [OLLAMA.md](OLLAMA.md), then start the server with that model. No API
 key is needed, requests stay local, and the server uses Ollama's native
-decision endpoint.
-TypeSafe Jev remains available as the cloud alternative.
+decision endpoint. To use the original cloud backend instead, follow the
+TypeSafe setup in [Running](#running).
 
 Jev is a general-purpose decision model, not a dedicated Go engine. The
 TypeSafe policy scores each legal move and combines those scores with a
@@ -35,13 +41,54 @@ baseline comparison rather than a strong Go exhibition. See the
 approach, replay, and benchmark summary below, and [DESIGN.md](DESIGN.md)
 for the experiment history and per-seed results.
 
-Historical benchmark results below describe the earlier scored policy,
-not the current Ollama Choice/Noul tournament. They also predate the
+Historical benchmark results below were obtained with **TypeSafe Jev**,
+including both the early Choice-only and later scored policies—not the
+current Ollama Choice/Noul tournament. They also predate the
 player-relative komi correction; rerun before using them as ratings for
 the current build.
 
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
+
+## Ollama and TypeSafe at a glance
+
+Ollama is the local runtime, not a model name. The local example here is
+**Nimble** (`nimble-go`, a 16K-context configuration of `nimble`); the
+original cloud model is **TypeSafe Jev**.
+
+| | Ollama with Nimble | TypeSafe Jev |
+|---|---|---|
+| Role in this project | Accessible local option, added after the original development | Original development and benchmark backend |
+| Requirements | Ollama, model download, suitable local hardware; no API key | TypeSafe API key and network access; inference runs remotely |
+| Default move policy | Choice tournament over all legal actions plus a Noul pass gate | Per-action Scores plus a Choice prior and Noul pass gate |
+| Published development benchmarks | Not Nimble results | Obtained using TypeSafe Jev; model releases and configurations are recorded below |
+| What can be concluded | Supported and playable locally; no established strength rating here | Historical evidence for the tested Jev policies, not a general Go rank |
+
+The default policies differ, so a direct comparison of their normal
+autoplay games mixes model and decision-method effects. A fair model
+comparison should use the same positions, prompts, legal actions, and
+decision method on both backends.
+
+### Quick matched model comparison
+
+On **2026-10-01**, a small probe compared local Nimble
+(`nimble-go:latest`) with TypeSafe Jev (resolved to `jev-1.13.0`).
+Both used the same **Choice/Noul tournament**, board facts, and complete
+legal action list—no per-move Scores on either backend.
+
+| Position, White to move | Nimble move / elapsed | TypeSafe Jev move / elapsed |
+|---|---|---|
+| Opening after Black E5 | G5 / 1.72s | B5 / 0.62s |
+| Black D4 can be captured at D5 | D5 / 1.55s | D5 / 0.63s |
+| Seeded 21-ply position | B2 / 1.96s | D2 / 0.56s |
+
+Both found the one-stone capture at D5. They disagreed on the other two
+moves; without an independent evaluation, disagreement is not evidence
+that one move was better. TypeSafe was faster in this sample (mean
+0.60s versus 1.74s), but these are single-trial machine/network timings,
+not a controlled performance benchmark or strength rating. This probe
+also differs from TypeSafe's normal scored policy.
+See [method and fixtures](BENCHMARK.md#quick-matched-model-comparison).
 
 ## The takeaway
 
@@ -57,8 +104,8 @@ benchmarked the project as it grew.
 
 ## How it evolved
 
-The game went through three generations, each measured against the
-previous one:
+The original TypeSafe-backed game went through three generations, each
+measured against the previous one:
 
 1. **First version** (`main` branch, through commit `0d24bc2`): Jev
    received a board description with a territory estimate, strengthened
@@ -365,7 +412,7 @@ local heuristic.
 
 ### Replay
 
-This recorded game displays the board and the per-point Jev score heat
+This TypeSafe Jev recording displays the board and the per-point score heat
 map side by side. Placed stones are shown on the board and set their
 heat-map positions to zero; open points show the score-plus-log-prior
 value with interpolation between intersections. The pass probability is
@@ -378,7 +425,7 @@ shown above the boards.
 
 ### Benchmark
 
-Lukas's paired headless benchmark compared the earlier compact
+Using TypeSafe Jev, Lukas's paired headless benchmark compared the earlier compact
 `Choice`-only prompt against this multi-output candidate scorer. Both
 cohorts used the same reconstructed harness, game rules, local Black
 heuristic, terminal scoring, 600-turn limit, random seeds 1–10, and Jev
@@ -400,6 +447,8 @@ for details and limitations. The color-balanced Elo runner and opponent
 anchor definitions are documented in [BENCHMARK.md](BENCHMARK.md).
 
 ### Benchmark: mechanical facts and the full anchor pool
+
+These are TypeSafe Jev results, not Ollama/Nimble measurements.
 
 Since that comparison, the state gained mechanical facts computed by the
 rules engine — weak-group scan, capture threats, ladder warnings,
@@ -442,6 +491,8 @@ The table above is kept as originally measured; the other anchors have
 not been re-run post-fix.
 
 ### Benchmark against KataGo
+
+This evaluation used TypeSafe Jev against the KataGo anchor.
 
 [KataGo](https://github.com/lightvector/KataGo) is the strongest
 open-source Go engine — at full strength it plays far above any human.

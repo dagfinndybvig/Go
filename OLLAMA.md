@@ -1,10 +1,15 @@
-# Ollama — recommended local decision AI
+# Ollama — accessible local decision AI
 
-Ollama is the recommended way to run Jev Go's decision AI. It needs no
-API key and keeps board positions on the configured host. Interactive
+Ollama is the accessible, no-API-key way to try Jev Go locally on suitable
+hardware. The project also fully supports TypeSafe Jev, the **original
+backend used to develop the game**. The published development benchmarks
+and replay in README.md and DESIGN.md were produced with TypeSafe Jev;
+they are not measurements of Nimble.
+
+Ollama keeps board positions on the configured host. Interactive
 play uses a complete typed Choice plus a Noul pass gate; TypeSafe adds
 an exhaustive Score for every legal action. TypeSafe remains available
-as the cloud alternative.
+as the original cloud option.
 
 ## Prerequisites
 
