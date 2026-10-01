@@ -660,10 +660,11 @@ beginner strength.
 ### Jev-compatible decision AI
 
 White's moves are chosen by TypeSafe Jev or an Ollama model. Interactive
-Ollama play requests a complete Choice and Noul pass gate; TypeSafe also
-requests exhaustive candidate Scores. Older Ollama versions use the
-server's JSON-schema chat adapter. Without either backend, White falls
-back to the local heuristic.
+Ollama play requires **Ollama 0.35.0 or newer** and requests a complete
+Choice and Noul pass gate; TypeSafe also requests exhaustive candidate
+Scores. The server retains a JSON-schema chat adapter for compatibility,
+but older Ollama versions are not the supported setup. Without either
+backend, White falls back to the local heuristic.
 
 - **Browser endpoint**: `POST /jev` when served locally
 - **Upstream**: TypeSafe `/v1/systemone`, Ollama `/v1/systemone`, or

@@ -16,7 +16,8 @@ TypeSafe remains fully supported as the original backend.
 
 **Accessible local option:** Ollama support was added so the project can
 also be tried without a TypeSafe account or API key, on hardware capable
-of running the selected model. Install [Ollama](https://ollama.com), run
+of running the selected model. Install **[Ollama](https://ollama.com) 0.35.0
+or newer (required)**, run
 `ollama pull nimble:latest`, create the 16K `nimble-go` variant in
 [OLLAMA.md](OLLAMA.md), then start the server with that model. No API
 key is needed, requests stay local, and the server uses Ollama's native
@@ -59,7 +60,7 @@ original cloud model is **TypeSafe Jev**.
 | | Ollama with Nimble | TypeSafe Jev |
 |---|---|---|
 | Role in this project | Accessible local option, added after the original development | Original development and benchmark backend |
-| Requirements | Ollama, model download, suitable local hardware; no API key | TypeSafe API key and network access; inference runs remotely |
+| Requirements | Ollama 0.35.0 or newer, model download, suitable local hardware; no API key | TypeSafe API key and network access; inference runs remotely |
 | Default move policy | Choice tournament over all legal actions plus a Noul pass gate | Per-action Scores plus a Choice prior and Noul pass gate |
 | Published development benchmarks | Not Nimble results | Obtained using TypeSafe Jev; model releases and configurations are recorded below |
 | What can be concluded | Supported and playable locally; no established strength rating here | Historical evidence for the tested Jev policies, not a general Go rank |
@@ -176,8 +177,8 @@ off/on (0)**, **TypeSafe key (J)**, and **Jev log (L)**.
 **Without a server (local AI plays White):** open `jev-go.html` directly
 in a browser. No build step or external assets are required.
 
-**With local Ollama (no API key):** install Ollama, pull a decision model
-such as `nimble:latest`, then run:
+**With local Ollama (no API key):** install **Ollama 0.35.0 or newer**,
+pull a decision model such as `nimble:latest`, then run:
 
 ```
 node server.js

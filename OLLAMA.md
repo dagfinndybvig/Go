@@ -14,16 +14,17 @@ as the original cloud option.
 ## Prerequisites
 
 1. Install Node.js 18 or newer.
-2. Install and start Ollama.
+2. Install and start **Ollama 0.35.0 or newer (required)**.
 3. Pull a decision model, for example:
 
 ```sh
 ollama pull nimble:latest
 ```
 
-Ollama 0.35 or newer is recommended. Its native `/v1/systemone`
+Ollama 0.35.0 is the minimum supported version. Its native `/v1/systemone`
 endpoint supplies the Choice probabilities and Noul probability used by
-interactive play.
+interactive play. Check your installation with `ollama --version` and
+upgrade if it is older than 0.35.0.
 
 ## Start
 
@@ -130,6 +131,9 @@ retains exhaustive candidate Scores in both browser and benchmark.
 
 ### Chat-adapter mode
 
+This retained compatibility code does not lower the documented minimum:
+use Ollama 0.35.0 or newer for supported game and benchmark usage.
+
 If `/v1/systemone` is unavailable, the server converts all typed
 questions into one JSON-schema-constrained `/api/chat` request. It
 requires a value for every field, then reshapes the result into the Jev
@@ -137,7 +141,7 @@ response format. Choice probabilities are synthetic in this mode; Noul
 and Score values come from the chat model. Missing or invalid fields
 produce an explicit `502` rather than a partial success.
 
-Native decision mode is strongly preferred for speed and fidelity.
+Native decision mode is the supported path for speed and fidelity.
 
 ## Verify
 

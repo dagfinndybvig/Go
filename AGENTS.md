@@ -106,9 +106,9 @@ There is no test framework. Tests are throwaway Node scripts using
   restart; `server.js` changes do.
 - Backend precedence is explicit `OLLAMA_MODEL`, then a TypeSafe key,
   then the first context-compatible Ollama model auto-detected from
-  `/api/tags` plus `/api/show`. Native
-  Ollama `/v1/systemone` is preferred; older versions use a generalized
-  chat adapter that must return every requested typed field.
+  `/api/tags` plus `/api/show`. The documented minimum is Ollama 0.35.0,
+  using native `/v1/systemone`. The retained generalized chat adapter
+  must return every requested typed field; it does not lower that minimum.
   `OLLAMA_HOST` supports HTTP and HTTPS.
 - Ollama native limits are at most 64 questions and 26 candidates per
   Choice. Interactive Ollama play requests the complete Choice plus

@@ -22,6 +22,9 @@ grouping, and scoring policy across backends.
 
 **Recommended local run (no API key):**
 
+Requires **Ollama 0.35.0 or newer** for the native `/v1/systemone`
+endpoint.
+
 ```sh
 node benchmark.js --pairs 10 --ollama-model nimble-go:latest
 ```
