@@ -24,6 +24,13 @@ key is needed, requests stay local, and the server uses Ollama's native
 decision endpoint. To use the original cloud backend instead, follow the
 TypeSafe setup in [Running](#running).
 
+**Playing strength with the current defaults:** in a ten-game test per
+player against the autoplay Black heuristic, **TypeSafe won 9/10;
+Nimble lost all ten**, with all its stones captured in nine games.
+Ollama is the accessible local option, not an equally strong player in
+this setup. See the [current-player comparison](#ten-games-each-against-black)
+below, including why Nimble uses a lighter policy.
+
 Jev is a general-purpose decision model, not a dedicated Go engine. The
 TypeSafe policy scores each legal move and combines those scores with a
 move-choice prior and a separate pass judgment. Ollama uses a lighter
@@ -63,12 +70,57 @@ original cloud model is **TypeSafe Jev**.
 | Requirements | Ollama 0.35.0 or newer, model download, suitable local hardware; no API key | TypeSafe API key and network access; inference runs remotely |
 | Default move policy | Choice tournament over all legal actions plus a Noul pass gate | Per-action Scores plus a Choice prior and Noul pass gate |
 | Published development benchmarks | Not Nimble results | Obtained using TypeSafe Jev; model releases and configurations are recorded below |
-| What can be concluded | Supported and playable locally; no established strength rating here | Historical evidence for the tested Jev policies, not a general Go rank |
+| Current-player test against greedy Black | 0 wins, 10 losses; nine complete wipeouts | 9 wins, 1 loss |
+| What can be concluded | Accessible and playable locally, but substantially weaker in this matchup | Clearly stronger in this matchup; not a general Go rank |
 
 The default policies differ, so a direct comparison of their normal
-autoplay games mixes model and decision-method effects. A fair model
-comparison should use the same positions, prompts, legal actions, and
-decision method on both backends.
+autoplay games measures **the two players as configured**, including both
+model and decision method. That is a useful playing-strength comparison.
+Isolating the model itself instead requires the same positions, prompts,
+legal actions, and decision method on both backends.
+
+### Ten games each against Black
+
+On **2026-10-01**, at commit `a096438`, each player played ten games as
+**White against the same local greedy Black heuristic used in autoplay**.
+The run used `benchmark.js`'s game loop with seeds **1–10** for each
+player, empty-board starts, normal 5.5 komi, and a 600-ply cap. This was
+a White-only comparison, not the CLI's default color-swapped pairs.
+Matching seeds controls Black's random tie-breaking; different White
+moves still lead to different games.
+
+| White player and current policy | Wins–Losses | Mean score margin | Median score margin |
+|---|---:|---:|---:|
+| Nimble (`nimble-go:latest`), Choice/Noul tournament | 0–10 | −68.2 | −75.5 |
+| TypeSafe Jev (`jev-1.13.0`), Scores + Choice + Noul | 9–1 | +14.2 | +6.5 |
+
+All 20 games ended normally with two passes: no errors, draws, or
+turn-cap exclusions. Margins are White's final score minus Black's.
+Nimble was completely wiped off the board in nine games, losing each
+by 75.5 points; its remaining loss was by 2.5. TypeSafe mostly won by
+smaller margins, with one complete wipeout of Black inflating its mean;
+its sole loss was by 2.5 points.
+
+This is a small sample against a deliberately weak opponent, not a
+general rating, but the indication is clear: **TypeSafe is substantially
+stronger than Nimble as configured here**. These are new current-player
+results, separate from both the historical TypeSafe benchmarks below
+and the matched three-position probe.
+
+**Why Nimble uses this mode:** requesting a separate Score for every
+legal action made local inference too slow for comfortable interactive
+play. The Ollama path therefore omits those Scores and uses Choice plus
+a Noul pass judgment to reduce per-turn work and keep the browser
+responsive. Since Ollama's native endpoint allows at most 26 candidates
+per Choice, larger legal sets are compared in balanced groups followed
+by a final Choice among group winners. All legal actions are considered,
+and the same mechanical board facts are supplied.
+
+This was a **responsiveness choice, not a strength optimization**.
+TypeSafe retains per-action scoring. The results above do not tell us
+how much of the gap comes from the model versus the lighter policy, or
+whether restoring Scores would make Nimble competitive; that would
+require a separate experiment.
 
 ### Quick matched model comparison
 
