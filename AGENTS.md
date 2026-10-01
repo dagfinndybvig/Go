@@ -61,6 +61,9 @@ There is no test framework. Tests are throwaway Node scripts using
   `setTimeout` (sleep ~600ms+ after a Black move). Jev's fetch uses a
   10s `AbortController` timeout — polyfill `AbortController` in the vm
   context when testing `Jev.chooseMove`.
+- Prefer `await Jev.ready()` to a fixed discovery sleep. The VM needs
+  `setInterval`/`clearInterval` for the progress timer. Tests must cover
+  multiple White turns: 79 actions previously produced an invalid singleton.
 - The heuristic has random tie-breaking (`Math.random() * 2` in the
   score). Never assert a specific move choice — assert stone counts.
 - Jev mocks: any probabilities work — the game plays the argmax over
@@ -104,8 +107,11 @@ There is no test framework. Tests are throwaway Node scripts using
 - Ollama native limits are at most 64 questions and 26 candidates per
   Choice. Interactive Ollama play requests the complete Choice plus
   Noul, omitting exhaustive Scores for latency. The server and benchmark
-  split/recombine large Choice distributions; never truncate the legal
-  move list. Full benchmark requests use 44-question batches. Go's
+  share `ollama-decision.js`: balanced groups of 2–26, followed by a
+  Choice among group winners. Never average independent distributions or
+  generate singleton groups. Probabilities cover finalists only, tagged
+  with `selection` and `probabilityScope`. Full requests use 44-question
+  batches. Go's
   empty-board prompt is about
   8K tokens, so auto-detection prefers models configured with
   `num_ctx >= 16384`. The stock `nimble:latest` context is only 8194 and
@@ -148,14 +154,20 @@ There is no test framework. Tests are throwaway Node scripts using
 - White is the selected decision backend (Ollama or TypeSafe) when one
   is available. Without a backend, White falls back to the local
   heuristic. There is no fallback on low confidence or errors:
-  `jevMove` retries up to 3 times (10s timeout per attempt); if all
+  `jevMove` retries transient errors up to 3 times (10s TypeSafe, 30s Ollama);
+  non-transient HTTP 4xx failures stop immediately. If all
   retries fail it shows an error message and does not play a move. The
   HUD (`setHud`), score line, and matchup line show "Ollama", "Jev", or
   "Local AI" for White. `labels()` takes no parameters and checks the
   selected backend internally.
 - `chooseMove` receives every legal move. The Choice criteria contain
   every legal point plus `pass`; `buildState` supplies the compact board
-  and coordinate legend, and the argmax considers the full legal set.
+  and coordinate legend. Ollama compares group winners in a final round;
+  TypeSafe scores the complete set.
+- White waits for backend discovery before falling back locally. The
+  badge reports configured/in-progress/succeeded/error, not assumed
+  connectivity. Undo/New Game cancel timers and requests; generation
+  guards must protect status, logs, and board state from stale responses.
 - Jev's Choice criteria use each legal point's coordinate as the option
   name and `null` as its description; `pass` is also a null-described
   option. The compact state carries the board, game metadata, and an
@@ -183,8 +195,9 @@ There is no test framework. Tests are throwaway Node scripts using
   evidence.
 
 - The benchmark runner keeps Jev player-relative: when Jev plays actual
-  Black, the benchmark swaps board colors and capture counts before asking
-  the same White-oriented prompt. Keep color-swapped games paired by seed,
+  Black, the benchmark swaps board colors and capture counts and uses
+  `promptKomi = -5.5` in the White-oriented prompt (+5.5 for actual White).
+  Restore prompt komi with the snapshot. Keep color-swapped games paired by seed,
   and record the resolved model version and anchor name for every game.
   The summary reports exact two-sided sign tests per opponent: a
   per-game test on the win/loss record and a stricter seed-paired test
@@ -192,8 +205,9 @@ There is no test framework. Tests are throwaway Node scripts using
   the color advantage). Judge prompt variants by the seed-paired
   p-value, not raw win rates.
 - Benchmark Ollama mode rewrites both retained policy request paths to
-  `<OLLAMA_HOST>/v1/systemone`, replaces only the model name, and never
-  sends a TypeSafe authorization header. It requires native mode; do not
+  `<OLLAMA_HOST>/v1/systemone`, configures the same backend in the VM,
+  and uses the shared tournament adapter without a TypeSafe authorization
+  header. Record `decisionPolicy` as well as backend. It requires native mode; do not
   compare chat-adapter synthetic probabilities with native benchmarks.
 
 - For the optional KataGo anchor, `genmove` advances KataGo's GTP board itself;

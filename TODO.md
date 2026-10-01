@@ -8,8 +8,12 @@
       `/v1/systemone`; retain a generalized constrained-chat adapter for
       older Ollama versions.
 - [x] Preserve all 82 actions and 84 outputs across Ollama's native
-      limits by batching questions and splitting/recombining Choice
-      probabilities without truncating legal moves.
+      limits by batching questions and using balanced Choice groups plus
+      a final winner comparison, without singleton groups or averaging
+      independent probability distributions.
+- [x] Align Ollama browser/benchmark policies, correct color-swapped komi,
+      validate request shapes, fix root URLs with queries, cancel stale
+      White requests, and report actual decision status.
 - [x] Add Ollama model/version/mode HUD telemetry and direct Ollama
       support to the color-balanced benchmark.
 - [x] Verify native `nimble:latest`, legacy chat adaptation, backend

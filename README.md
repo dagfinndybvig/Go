@@ -18,13 +18,14 @@ decision endpoint.
 TypeSafe Jev remains available as the cloud alternative.
 
 Jev is a general-purpose decision model, not a dedicated Go engine. The
-current experiment asks it to score each legal move and combines those
-scores with a move-choice prior and a separate pass judgment. It still
-does no tree search or playouts, so the game compensates with mechanical
+TypeSafe policy scores each legal move and combines those scores with a
+move-choice prior and a separate pass judgment. Ollama uses a lighter
+Choice tournament and pass judgment. Neither uses tree search or playouts,
+so the game compensates with mechanical
 facts computed by the rules engine: each candidate move's exact capture
 and liberty consequences, ladder-capture warnings, snapback trade
 counts, and whether ataried Black groups can escape. Over the full
-local-anchor benchmark (160 games) this build beats the greedy
+historical local-anchor benchmark (160 games), the scored build beat the greedy
 heuristic 26-14 (65%, seed-paired sign test p = 0.0044) and beats
 noisier anchors by more. That run predates the simple-ko fix
 (commit `174139f`); the benchmark section notes a post-fix
@@ -34,14 +35,20 @@ baseline comparison rather than a strong Go exhibition. See the
 approach, replay, and benchmark summary below, and [DESIGN.md](DESIGN.md)
 for the experiment history and per-seed results.
 
+Historical benchmark results below describe the earlier scored policy,
+not the current Ollama Choice/Noul tournament. They also predate the
+player-relative komi correction; rerun before using them as ratings for
+the current build.
+
 A short recap of the rules of Go, with links for learning more, is in
 [GO_RULES.md](GO_RULES.md).
 
 ## The takeaway
 
 Dagfinn Dybvig started a naive attempt to let Jev play Go without any special training or programming. Lukas Mosser's rebuild — per-move
-Scores plus a Choice prior plus a Noul pass gate — is the architecture
-every later result lives inside; nothing since has replaced it. The
+Scores plus a Choice prior plus a Noul pass gate — underlies the recorded
+scoring experiments below. The current Ollama path instead uses a
+Choice/Noul tournament for latency. The
 mechanical-facts generation of the final version made it stronger by supplying what Jev
 cannot compute (captures, liberties, ladders, snapback) and
 withholding what it should judge for itself. The paired,
@@ -164,10 +171,10 @@ served by the local web server.
 
 The HUD shows who is playing at all times:
 
-- A prominent **backend indicator** under the title: green
-  `● Ollama connected — model · version, mode` or
-  `● TypeSafe Jev connected`, amber while checking, and red when White
-  is using the local fallback.
+- A prominent **backend indicator** under the title: amber for discovery,
+  configuration not yet verified, or a request in progress; green for
+  `last decision succeeded`; red for backend errors or the local fallback.
+  The model name is shown, but configuration alone never means connected.
 - A yellow **matchup line** under the title with stone glyphs, e.g.
   `● You (Black)  vs  ○ Ollama (White)` or
   `● You (Black)  vs  ○ Jev (White)`,
@@ -179,8 +186,9 @@ The HUD shows who is playing at all times:
   matchups and how to switch between them.
 - The indicator in the bottom-right corner:
 
-- **green WHITE: OLLAMA model (version, mode)** or **WHITE: JEV** — a
-  decision backend is choosing White's moves
+- **WHITE: OLLAMA model (version, mode)** or **WHITE: JEV** — the selected
+  decision backend; green after success, amber before verification or
+  during a request, red on error
 - **red WHITE: LOCAL AI** — no backend is configured; the local
   heuristic is playing White
 
@@ -252,9 +260,11 @@ retries up to 3 times before showing an error; White waits rather than
 falling back to the heuristic. Once the server is running again, the
 backend resumes automatically on White's next turn. If the page was
 loaded while the server was down, reload it after starting the server.
-Starting a new game or using **Undo** also invalidates any pending Jev
-response, so a late response from the previous position cannot play
-into the new game.
+Starting a new game or using **Undo** cancels delayed White moves and
+in-flight requests as well as invalidating old responses. Only one White
+decision can run per position. Backend discovery must complete before
+White can fall back to the local heuristic; discovery errors are not
+treated as proof that no backend exists.
 
 ## How it works
 
@@ -289,9 +299,12 @@ For TypeSafe, the request additionally asks for one
 `quality_<coordinate>` `Score` per candidate, including `quality_pass`,
 using the 0–4 rubric major blunder, poor, playable, good, excellent.
 Interactive Ollama play omits those 82 repeated Score questions and
-plays the highest-probability legal Choice allowed by the Noul pass
-gate. This reduced a measured opening turn from 524K aggregate input
-tokens and 14.5 seconds to 16K tokens and 1.5 seconds.
+plays the highest-probability allowed finalist after applying the Noul
+pass gate. Above 26 options, the adapter evaluates all actions in balanced
+groups of 2–26, then compares group winners in a final Choice.
+Probabilities describe that final comparison, not a synthetic global
+distribution. The tournament is an approximation and can depend on
+grouping. It is shared with the Ollama benchmark.
 
 Here is the JSON shape (the state text and move list are abbreviated; the
 live request expands them to the current position and every legal move):
@@ -344,10 +357,11 @@ score + 0.05 × ln(max(choice_probability, 1e-9))
 The TypeSafe `Score` is the main value estimate; the log-probability term gives
 the `Choice` a small prior. `pass` enters that comparison only when the
 `Noul` probability for “passing is strategically sound” is at least 0.5.
-Ollama instead takes the Choice argmax after applying the same pass gate.
-The selected move is deterministic. The browser retries backend errors
-or timeouts up to three times; without Ollama or a TypeSafe key, White
-uses the local heuristic.
+Ollama instead takes the final Choice argmax after applying the same
+pass gate. The selected move is deterministic. Network errors, timeouts,
+HTTP 408/429, and 5xx errors retry up to three times; other HTTP 4xx errors
+are shown immediately. Without Ollama or a TypeSafe key, White uses the
+local heuristic.
 
 ### Replay
 
@@ -536,6 +550,7 @@ autoplay runs.
 jev-go.html   — entire game (single file, no dependencies)
 server.js     — local Node.js server + Ollama/TypeSafe decision proxy
 benchmark.js  — paired Ollama/TypeSafe rating runner
+ollama-decision.js — shared validation, batching, and Choice tournament
 OLLAMA.md     — recommended local-model setup and protocol guide
 index.html    — redirect to jev-go.html, so GitHub Pages serves the game
 ```

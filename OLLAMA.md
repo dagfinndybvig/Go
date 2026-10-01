@@ -43,10 +43,11 @@ set "OLLAMA_MODEL=nimble-go" && node server.js
 OLLAMA_MODEL=nimble-go node server.js
 ```
 
-Open **http://localhost:3000**. A green indicator under the title names
-the connected model, Ollama version, and decision mode. After Black
-moves, the status line shows a live thinking timer and then White's
-coordinate and elapsed time.
+Open **http://localhost:3000**. The indicator under the title starts at
+`configured (not yet verified)`, shows requests in progress, and turns
+green only after a successful decision. Errors appear in red; a configured
+model is not a health check. After Black moves, the status line shows a
+live thinking timer and then White's coordinate and elapsed time.
 
 The stock `nimble:latest` model is configured for only 8194 tokens. That
 is enough for sparse positions but dense tactical positions can exceed
@@ -102,19 +103,25 @@ browser POST /jev -> server -> Ollama /v1/systemone
                   <- Choice + Noul <-
 ```
 
-This preserves Ollama's real Choice probabilities, confidence, and Noul
-probability. Ollama limits one Choice to 26 candidates, while Go needs
-up to 82 actions. The proxy splits the Choice into 26-option parts and
-recombines their normalized probabilities; no legal move is dropped.
-Avoiding 82 separate Score questions cuts a first-turn request from
-about 524K aggregate input tokens to about 16K and reduced the measured
-local response from 14.5 seconds to 1.5 seconds. The server also sends a
-small multi-output warm-up request at startup.
+Ollama limits one Choice to 2–26 candidates, while Go needs up to 82
+actions. The shared `ollama-decision.js` adapter uses balanced groups
+with no singleton remainder, evaluates every legal action, and asks a
+final Choice to compare the group winners. Independent group
+probabilities are **not** averaged: they cannot establish a global
+ranking. The returned probabilities and confidence describe the final
+comparison only, marked `selection: "tournament"` and
+`probabilityScope: "finalists"`. This is a tournament approximation,
+not an exact full-set softmax, and can depend on grouping.
 
-The proxy still accepts the full Choice/Noul/Score contract, and the
-benchmark runner can use it for controlled experiments. The lightweight
-interactive path is specific to browser play through Ollama. TypeSafe
-interactive play retains exhaustive candidate Scores.
+Omitting per-action Scores keeps interactive inference smaller; the
+final comparison adds one request for Choices above 26 options. A single
+30-second deadline covers all rounds. The server also sends a small
+multi-output warm-up request at startup.
+
+The proxy still accepts the full Choice/Noul/Score contract and batches
+large requests into at most 44 questions each. The benchmark uses the
+same Choice/Noul tournament policy as interactive Ollama play. TypeSafe
+retains exhaustive candidate Scores in both browser and benchmark.
 
 ### Chat-adapter mode
 
@@ -138,28 +145,31 @@ curl http://localhost:3000/jevstatus
 Example:
 
 ```json
-{"serverKey":true,"backend":"ollama:nimble:latest","mode":"native","version":"0.35.0"}
+{"serverKey":true,"backend":"ollama:nimble-go:latest","mode":"native","version":"0.35.0"}
 ```
 
 The server accepts the full request shape documented in
 [README.md](README.md#how-it-works). Press **L** in game to inspect
 choices, confidence, probabilities, and pass judgments. Ollama
-interactive entries have `scores: null`; TypeSafe entries include
-per-candidate Scores.
+entries have `scores: null` and record the selection method and
+probability scope; TypeSafe entries include per-candidate Scores.
+`/jevstatus` reports configuration, not proof that a move will succeed.
+The browser waits for discovery before deciding whether to use a model
+or the local heuristic; a discovery failure is shown as an error.
 
 ## Benchmarking
 
 The retained color-balanced runner can call Ollama directly:
 
 ```sh
-node benchmark.js --pairs 10 --ollama-model nimble:latest
+node benchmark.js --pairs 10 --ollama-model nimble-go:latest
 ```
 
 Use `--ollama-host URL` for a non-default instance. `OLLAMA_MODEL` and
 `OLLAMA_HOST` provide the same defaults as the server. The benchmark
 requires native `/v1/systemone`; it deliberately does not use the chat
 adapter because native and synthetic probabilities are not equivalent.
-Each game record includes `decisionBackend`.
+Each game record includes `decisionBackend` and `decisionPolicy`.
 
 ## Troubleshooting
 
@@ -172,10 +182,14 @@ Each game record includes `decisionBackend`.
   need more than the stock Nimble model's 8194 tokens. Create the 16K
   `nimble-go` variant above or use another model configured for at least
   16384 tokens.
+- **HTTP 400 mentioning 2–26 candidates:** update the game and restart
+  the server. Older adapters made invalid one-option remainders at 27,
+  53, and 79 legal actions; increasing context does not fix that bug.
+  Non-transient HTTP 4xx errors are shown immediately without retries.
 - **HTTP 504:** the model exceeded the 30-second local deadline. Use a
   faster model or allow it to warm before playing.
 - **HTTP 502 in chat mode:** the model failed to return every required
   Choice, Noul, and Score field. Native mode is more reliable.
 - **Wrong model selected:** set `OLLAMA_MODEL` explicitly. Auto-detection
-  chooses the first installed model advertising at least an 8192-token
+  chooses the first installed model advertising at least a 16384-token
   context.

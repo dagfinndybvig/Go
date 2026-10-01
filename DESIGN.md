@@ -669,7 +669,8 @@ back to the local heuristic.
   `AbortController`
 - **Retry**: on error or timeout, `jevMove` retries up to 3 times (1s
   between attempts). If all retries fail, an error message is shown and
-  no move is played — the game waits.
+  no move is played — the game waits. HTTP 4xx errors other than 408/429
+  are not retried.
 
 #### State sent to the decision model
 
@@ -678,6 +679,10 @@ candidate move deltas:
 
 - Rules and side mapping: White is `X`, Black is `O`, area scoring,
   komi 5.5, and two consecutive passes end the game.
+- The benchmark uses `promptKomi = -5.5` when actual Black is represented
+  as White, and +5.5 for actual White. This changes the prompt, not real
+  scoring, and is restored with the engine snapshot. Historical paired
+  results above predate this correction and should be rerun.
 - Captures, consecutive pass count, and the recent move for each side.
 - A compact board with row 9 first and row 1 last; `.` is empty.
 - A coordinate legend at the end of the state: columns left-to-right
@@ -730,8 +735,16 @@ trained the model with DSPy/ReAnchor.
 #### Move selection
 
 TypeSafe combines each point's expected Score with a small log prior
-from the Choice probability. Ollama takes the Choice argmax. Both
-consider `pass` only when the Noul probability is at least 0.5. There is
+from the Choice probability. Ollama uses balanced groups of 2–26 actions
+and compares their winners in a final Choice. The shared adapter
+`ollama-decision.js` never averages independently normalized group
+probabilities. Every legal action participates in round one; returned
+probabilities and confidence refer only to the finalists, tagged
+`selection: "tournament"` and `probabilityScope: "finalists"`. This
+tournament is an approximation, not a full-set softmax.
+
+Ollama uses that final Choice argmax in both browser and benchmark.
+Both backends consider `pass` only when the Noul probability is at least 0.5. There is
 no temperature or sampling. If a required typed answer is missing, the
 request fails and follows the existing retry path.
 This is a one-ply decision: the model scores resulting move effects, but
@@ -744,10 +757,14 @@ retries instead. The only fallback is when no decision backend exists:
 
 - No Ollama model or TypeSafe key: the HUD shows "WHITE: LOCAL AI" and
   White is played by the local heuristic. The game continues.
-- Timeout (10s) or network error: `jevMove` retries up to 3 times with
+- Timeout (10s TypeSafe, 30s Ollama), HTTP 408/429/5xx, or network error:
+  `jevMove` retries up to 3 times with
   1s between attempts. If all retries fail, an error message is shown
   and the game waits — it does not substitute the heuristic.
 - Illegal choice: retried up to 3 times, then an error message is shown.
+- Other HTTP 4xx errors: display the upstream detail immediately.
+- Backend discovery errors: show an error rather than using the heuristic.
+  White waits for discovery; configuration is not proof of a healthy model.
 
 Every error is logged with its reason; every successful decision is
 logged with both Jev's original pick and the played pick.
@@ -765,12 +782,15 @@ CORS headers, and browsers do not call Ollama directly:
 
 The HUD in the bottom-right corner reflects this at all times:
 
-- **green `WHITE: OLLAMA <model> (version, mode)`** or
-  **`WHITE: JEV`** — a decision backend is choosing White's moves
+- **`WHITE: OLLAMA <model> (version, mode)`** or **`WHITE: JEV`** —
+  selected backend; amber until verified or while a request is running,
+  green after a successful decision, red on failure
 - **red `WHITE: LOCAL AI`** — no backend exists
 
-`GET /jevstatus` reports `serverKey`, `backend`, `mode`, and `version`;
-the game polls it once at startup to enable and label the backend.
+`GET /jevstatus` reports configuration (`serverKey`, `backend`, `mode`,
+and `version`), not health. The game awaits it before choosing White's
+driver. Discovery has a 5-second deadline and is retried on a subsequent
+attempt after failure.
 
 ## Autoplay modes
 
@@ -815,10 +835,10 @@ Ollama or TypeSafe backend.
 
 ## HUD and logging
 
-- **Backend indicator** (under the title): prominently reports
-  connecting, connected Ollama model/version/mode, connected TypeSafe,
-  or the local fallback. Green means ready, amber means checking, and
-  red means no decision backend.
+- **Backend indicator** (under the title): reports discovery, configuration
+  not yet verified, a request in progress, the last decision succeeding,
+  errors, or local fallback. Green means a decision succeeded, not that
+  configuration alone proves connectivity.
 - **Matchup line** (under the title, yellow, large): exactly who is
   playing who, with stone glyphs — `● You (Black) vs ○ Ollama (White)`,
   `● You (Black) vs ○ Jev (White)`, `● You (Black) vs ○ Local AI
@@ -841,8 +861,7 @@ Ollama or TypeSafe backend.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
 - **`WHITE: OLLAMA ...` / `WHITE: JEV` / `WHITE: LOCAL AI`**
-  (bottom-right): which backend is driving White. Green for decision AI,
-  red for local AI.
+  (bottom-right): which backend is driving White and its decision status.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
@@ -850,7 +869,8 @@ Ollama or TypeSafe backend.
 - **Console**: `window.jevLog()` returns the full 200-entry ring buffer;
   `window.jevClear()` empties it. Log entries carry `{ t, ok, choice,
   jevChoice, confidence, probabilities, passProbability, passAllowed,
-  scores, usage, model, state, reason }`.
+  scores, usage, model, state, reason }`. Ollama also records `selection`
+  and `probabilityScope`; its `scores` are null.
 
 ## Architecture
 
@@ -859,18 +879,21 @@ index.html    — redirect to jev-go.html (GitHub Pages serves index.html at the
 jev-go.html   — entire game: rules, rendering, both AIs, UI (single file, no dependencies)
 server.js     — local Node.js server + Ollama/TypeSafe decision proxy
 benchmark.js  — paired Ollama/TypeSafe rating runner and trace writer
+ollama-decision.js — shared validation, question batching, and Choice tournament
 OLLAMA.md     — recommended local backend setup and protocol details
 ```
 
 `server.js` serves the static game on port 3000 and answers `POST /jev`
 from an explicit Ollama model, TypeSafe, or an auto-detected Ollama
-model, in that order. Native Ollama requests are forwarded unchanged
-except for the model name. The compatibility adapter maps every Choice,
+model, in that order. Native requests are validated, assigned the configured
+model, batched into at most 44 questions, and large Choices use the shared
+tournament adapter. The compatibility adapter maps every Choice,
 Noul, and Score question into a constrained chat response and rejects
 partial replies. The TypeSafe key may come from either
 `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` in the environment or local
 `.env`; a browser key takes precedence on that path. Hidden files are
-blocked from static requests. `GET /jevstatus` reports the selected
+blocked from static requests. Root URLs with query strings serve the same
+game as `/`. `GET /jevstatus` reports the selected
 backend, decision mode, and Ollama version. The server
 binds to `127.0.0.1` by default so the LAN cannot reach the proxy and
 spend the server key; `HOST=0.0.0.0` opts into LAN exposure deliberately.
@@ -894,15 +917,13 @@ is stopped.
 every request, so changes to `jev-go.html` need no restart — a browser
 refresh picks them up. Changes to `server.js` require a restart.
 
-**Mid-game failure**: if the server dies while a game is open, Jev's
-move requests fail and the game retries up to 3 times (10s timeout per
-attempt) before showing an error message. Once the server is back, Jev resumes
-automatically on White's next turn, provided the server had a key when
-the page was loaded (`serverKey` is detected once at startup). If the
-page was loaded while the server was down, reload the page after
-starting the server, or press `J` and enter a key.
-Each Jev request carries the current game generation; starting a new game
-or undoing invalidates older responses and scheduled retries.
+**Mid-game failure**: if the server dies, transient move failures retry
+up to 3 times (10s TypeSafe, 30s Ollama per attempt), then the game waits.
+Restart the server and undo/replay the Black move or start a new game
+after retries are exhausted. Each White turn waits for backend discovery.
+New Game/Undo cancel the delayed White timer and abort in-flight requests.
+A generation guard protects the board, log, and status from late responses;
+a single-request guard prevents duplicate decisions for one turn.
 
 ### Constants
 
@@ -913,6 +934,6 @@ or undoing invalidates older responses and scheduled retries.
 | `CELL` | 51 px | Intersection spacing ((468 − 60) / 8) |
 | `AUTO_DELAY` | 700 ms | Pause between autoplay moves |
 | `LOG_MAX` | 200 | Jev decision ring-buffer size |
-| fetch timeout | 10000 ms | Jev poll timeout via `AbortController` |
+| fetch timeout | 10000 / 30000 ms | TypeSafe / Ollama, including response body and native rounds |
 | retry limit | 3 | Retries on error/timeout before giving up |
 | komi | 5.5 | Points added to White's area score |

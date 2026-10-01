@@ -11,107 +11,40 @@ const vm = require('node:vm');
 const { spawn, execFileSync } = require('node:child_process');
 const readline = require('node:readline');
 const crypto = require('node:crypto');
+const { runNativeDecision, OllamaHttpError } = require('./ollama-decision');
 
 const ROOT = __dirname;
 const DEFAULT_MAX_TURNS = 600;
 const DEFAULT_OPPONENTS = ['greedy'];
-const OLLAMA_MAX_CHOICE_CANDIDATES = 26;
-const OLLAMA_QUESTIONS_PER_BATCH = 44;
-
-function prepareOllamaQuestions(questions) {
-  const expanded = {};
-  const splitChoices = [];
-  for (const [name, question] of Object.entries(questions)) {
-    const criteria = Array.isArray(question.criteria)
-      ? question.criteria.map(String)
-      : Object.keys(question.criteria || {});
-    if (question.type !== 'choice' || criteria.length <= OLLAMA_MAX_CHOICE_CANDIDATES) {
-      expanded[name] = question;
-      continue;
-    }
-    const parts = [];
-    for (let i = 0; i < criteria.length; i += OLLAMA_MAX_CHOICE_CANDIDATES) {
-      const partName = name + '__part_' + (parts.length + 1);
-      const names = criteria.slice(i, i + OLLAMA_MAX_CHOICE_CANDIDATES);
-      expanded[partName] = {
-        ...question,
-        criteria: Object.fromEntries(names.map(candidate => [
-          candidate,
-          Array.isArray(question.criteria) ? null : question.criteria[candidate],
-        ])),
-      };
-      parts.push(partName);
-    }
-    splitChoices.push({ name, parts });
-  }
-  return { expanded, splitChoices };
-}
-
-function collapseOllamaChoices(reply, splitChoices) {
-  for (const split of splitChoices) {
-    const probabilities = {};
-    let confidence = 0;
-    const partAnswers = split.parts.map(partName => {
-      const answer = reply.answers[partName];
-      if (!answer || !answer.probabilities) throw new Error('Ollama omitted split Choice ' + partName);
-      return { partName, answer };
-    });
-    const candidateCount = partAnswers.reduce(
-      (total, part) => total + Object.keys(part.answer.probabilities).length,
-      0
-    );
-    for (const { partName, answer } of partAnswers) {
-      confidence = Math.max(confidence, Number(answer.confidence || 0));
-      const partWeight = Object.keys(answer.probabilities).length / candidateCount;
-      for (const [candidate, probability] of Object.entries(answer.probabilities)) {
-        probabilities[candidate] = probability * partWeight;
-      }
-      delete reply.answers[partName];
-    }
-    const choice = Object.entries(probabilities)
-      .reduce((best, entry) => entry[1] > best[1] ? entry : best)[0];
-    reply.answers[split.name] = { type: 'choice', choice, confidence, probabilities };
-  }
-  return reply;
-}
-
 async function fetchOllamaDecision(endpoint, model, init) {
   const request = JSON.parse(init.body);
   request.model = model;
-  const prepared = prepareOllamaQuestions(request.questions || {});
-  const entries = Object.entries(prepared.expanded);
-  const batches = [];
-  for (let i = 0; i < entries.length; i += OLLAMA_QUESTIONS_PER_BATCH) {
-    const body = JSON.stringify({
-      ...request,
-      questions: Object.fromEntries(entries.slice(i, i + OLLAMA_QUESTIONS_PER_BATCH)),
+  const controller = new AbortController();
+  const abort = () => controller.abort();
+  if (init.signal?.aborted) abort();
+  init.signal?.addEventListener('abort', abort, { once: true });
+  const deadline = setTimeout(abort, 30000);
+  try {
+    const data = await runNativeDecision(request, async batch => {
+      const response = await fetch(endpoint, {
+        ...init,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(batch),
+        signal: controller.signal,
+      });
+      return { status: response.status, data: await response.json() };
     });
-    batches.push(fetch(endpoint, {
-      ...init,
-      headers: { 'Content-Type': 'application/json' },
-      body,
-      signal: AbortSignal.timeout(30000),
-    }));
-  }
-  const responses = await Promise.all(batches);
-  const failure = responses.find(response => !response.ok);
-  if (failure) return failure;
-  const replies = await Promise.all(responses.map(response => response.json()));
-  const merged = {
-    model: replies.find(reply => reply.model)?.model || model,
-    answers: {},
-    usage: {},
-  };
-  for (const reply of replies) {
-    Object.assign(merged.answers, reply.answers || {});
-    for (const [name, value] of Object.entries(reply.usage || {})) {
-      if (Number.isFinite(value)) merged.usage[name] = (merged.usage[name] || 0) + value;
+    return new Response(JSON.stringify(data), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  } catch (error) {
+    if (error instanceof OllamaHttpError) {
+      return new Response(JSON.stringify(error.data), { status: error.status, headers: { 'Content-Type': 'application/json' } });
     }
+    throw error;
+  } finally {
+    clearTimeout(deadline);
+    init.signal?.removeEventListener('abort', abort);
+    abort();
   }
-  return new Response(JSON.stringify(collapseOllamaChoices(merged, prepared.splitChoices)), {
-    status: 200,
-    headers: { 'Content-Type': 'application/json' },
-  });
 }
 
 function parseArgs(argv) {
@@ -393,7 +326,7 @@ function loadGame(apiKey, decisionBackend) {
       captures: { ...captures },
       lastMove: lastMove ? lastMove.map(row => row.slice()) : null,
       lastCoord: lastCoord ? { ...lastCoord } : null,
-      jevLastChoice, passes, turn, gameOver,
+      jevLastChoice, passes, turn, gameOver, promptKomi,
     };
   },
   setState(s) {
@@ -405,6 +338,7 @@ function loadGame(apiKey, decisionBackend) {
     passes = s.passes || 0;
     turn = s.turn || BLACK;
     gameOver = !!s.gameOver;
+    promptKomi = s.promptKomi ?? 5.5;
   },
 };
 `;
@@ -412,11 +346,16 @@ function loadGame(apiKey, decisionBackend) {
     document, window: {}, localStorage: { getItem: () => null, setItem: noop },
     location: { hostname: 'benchmark.invalid' },
     fetch: trackedFetch, Math: math, console: { log: noop, warn: noop, error: noop },
-    setTimeout, clearTimeout, AbortController, AbortSignal,
+    setTimeout, clearTimeout, setInterval, clearInterval, AbortController, AbortSignal,
   };
   vm.runInNewContext(match[1] + shim, context, { filename: 'jev-go.html' });
   const engine = context.__benchmark;
   engine.Jev.setKey(apiKey);
+  engine.Jev.configureBackend({
+    serverKey: true,
+    backend: decisionBackend.label,
+    mode: decisionBackend.kind === 'ollama' ? 'native' : 'typesafe',
+  });
   return {
     engine,
     setRandom(fn) { math.random = fn; },
@@ -450,7 +389,7 @@ function compactState(engine, state) {
     rows.push(row);
   }
   return [
-    'W=X, B=O; White to play; area scoring; komi 5.5; two consecutive passes end the game.',
+    'W=X, B=O; White to play; area scoring; White komi ' + state.promptKomi + '; two consecutive passes end the game.',
     'Captures W/B: ' + state.captures[engine.WHITE] + '/' + state.captures[engine.BLACK] + '; consecutive passes: ' + state.passes + '; last Black: ' + lastBlack + '; last White: ' + (state.jevLastChoice || 'none/pass') + '.',
     'Board (rows 9 to 1; .=empty):',
     rows.join('\n'),
@@ -659,7 +598,7 @@ async function withCanonicalJevState(runtime, state, legal, color, ownLastMove, 
   const candidateMoves = canonical
     ? legal.map(move => ({ ...move, board: swapColors(move.board) }))
     : legal;
-  const promptState = { ...state, jevLastChoice: ownLastMove || null };
+  const promptState = { ...state, jevLastChoice: ownLastMove || null, promptKomi: canonical ? -5.5 : 5.5 };
   if (canonical) {
     engine.setState({
       ...promptState,
@@ -821,6 +760,8 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
           passProbability: last.passProbability,
           passAllowed: last.passAllowed,
           scores: last.scores,
+          selection: last.selection || 'score-prior',
+          probabilityScope: last.probabilityScope || 'all-candidates',
         };
       }
       jevDecisionMade = false;
@@ -904,6 +845,7 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
     outputTokens: tokens.output,
     models,
     decisionBackend: runtime.decisionBackend,
+    decisionPolicy: runtime.decisionBackend.startsWith('ollama:') ? 'choice-noul-tournament' : 'score-choice-noul',
     terminal: resignedBy != null ? 'opponent resigned' : finished ? 'two passes' : 'turn cap',
   };
 }

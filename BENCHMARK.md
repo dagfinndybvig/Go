@@ -10,7 +10,7 @@ are recorded.
 **Recommended local run (no API key):**
 
 ```sh
-node benchmark.js --pairs 10 --ollama-model nimble:latest
+node benchmark.js --pairs 10 --ollama-model nimble-go:latest
 ```
 
 ## Opponent anchors
@@ -29,8 +29,10 @@ The initial pool is deliberately small and reproducible:
 Jev is always represented as `White` in the prompt. When it plays actual
 Black, the runner swaps the board colors, captures, and candidate result
 boards before asking Jev to move, then translates its coordinate back to the
-real game. The game itself retains the normal Black-first turn order, area
-scoring, simple ko, and 5.5 komi for actual White.
+real game. Prompt komi is +5.5 for actual White and -5.5 for actual Black
+represented as White; this keeps the model's score margin consistent
+with the real game. The game itself retains the normal Black-first turn
+order, area scoring, simple ko, and 5.5 komi for actual White.
 
 ## Run
 
@@ -42,7 +44,7 @@ environment or local `.env` without printing it. Ollama takes precedence
 when both are configured. The runner requires Node.js 18 or newer.
 
 ```sh
-node benchmark.js --pairs 10 --ollama-model nimble:latest
+node benchmark.js --pairs 10 --ollama-model nimble-go:latest
 node benchmark.js --pairs 10                         # TypeSafe key required
 node benchmark.js --pairs 10 --opponents greedy,choice-only
 node benchmark.js --pairs 20 --opponents greedy,noise25,noise50,random
@@ -61,9 +63,17 @@ statistics; the summary reports their count separately.
 
 Ollama benchmarking requires native `/v1/systemone`; unlike `server.js`,
 the runner does not use the legacy chat adapter. Per-game records include
-`decisionBackend` (`typesafe` or `ollama:<model>`). The runner applies
-the same question batching and split-Choice probability merge as the
-server, preserving every legal move despite Ollama's per-request limits.
+`decisionBackend` (`typesafe` or `ollama:<model>`) and `decisionPolicy`
+(`choice-noul-tournament` or `score-choice-noul`). Ollama uses the same
+Choice/Noul policy and shared tournament adapter as the browser. All
+actions enter balanced groups of 2–26 candidates; their winners compete
+in a final Choice. Finalist probabilities are not a full-set distribution.
+TypeSafe retains a Score for each legal action.
+
+Older Ollama records used the exhaustive scored policy and averaged
+independent Choice distributions. Earlier color-swapped runs also had
+incorrect prompt komi. Keep those historical results separate; they
+are not measurements of the corrected current policy.
 
 ### Trace output
 
@@ -77,7 +87,8 @@ line per ply of every game:
   coordinate, or `resign`). Jev's own plies additionally carry `jev`: the
   picked move, the raw Choice answer, confidence, choice probabilities, the
   Noul pass-gate probability, whether the pass gate allowed passing, and the
-  per-candidate Scores.
+  selection method, probability scope, and per-candidate Scores
+  (`null` for Ollama).
 - `type: "terminal"` entries (one per game) carry the final board, the
   per-point area ownership map (`0` neutral, `1` Black, `2` White; stones
   count as their color, an empty region as the sole color it touches), the

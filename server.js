@@ -6,6 +6,7 @@ const http = require("http");
 const https = require("https");
 const fs = require("fs");
 const path = require("path");
+const { validateDecisionRequest, runNativeDecision, OllamaHttpError } = require("./ollama-decision");
 
 const PORT = 3000;
 const HOST = process.env.HOST || "127.0.0.1";
@@ -17,8 +18,6 @@ const TS_PATH = "/v1/systemone";
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
 const OLLAMA_URL = new URL(OLLAMA_HOST);
 const EXPLICIT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "";
-const OLLAMA_MAX_CHOICE_CANDIDATES = 26;
-const OLLAMA_QUESTIONS_PER_BATCH = 44;
 const MIN_OLLAMA_CONTEXT = 16384;
 let ollamaModel = EXPLICIT_OLLAMA_MODEL;
 let ollamaVersion = "";
@@ -127,7 +126,8 @@ function hasAllowedOrigin(req) {
 }
 
 function serveStatic(req, res) {
-  const url = req.url === "/" ? "/jev-go.html" : req.url.split("?")[0];
+  const pathname = req.url.split("?")[0];
+  const url = pathname === "/" ? "/jev-go.html" : pathname;
   let file;
   try {
     file = path.resolve(ROOT, "." + decodeURIComponent(url));
@@ -361,86 +361,23 @@ function chatAdapted(jevRequest, res) {
   });
 }
 
-function mergeDecisionReplies(replies) {
-  const merged = {
-    model: replies.find(reply => reply.model)?.model || ollamaModel,
-    answers: {},
-    usage: {},
-  };
-  for (const reply of replies) {
-    Object.assign(merged.answers, reply.answers || {});
-    for (const [name, value] of Object.entries(reply.usage || {})) {
-      if (Number.isFinite(value)) merged.usage[name] = (merged.usage[name] || 0) + value;
-    }
-  }
-  return merged;
-}
-
-function prepareNativeQuestions(questions) {
-  const expanded = {};
-  const splitChoices = [];
-  for (const [name, question] of Object.entries(questions)) {
-    const criteria = criteriaNames(question && question.criteria);
-    if (!question || question.type !== "choice" || criteria.length <= OLLAMA_MAX_CHOICE_CANDIDATES) {
-      expanded[name] = question;
-      continue;
-    }
-    const parts = [];
-    for (let i = 0; i < criteria.length; i += OLLAMA_MAX_CHOICE_CANDIDATES) {
-      const partName = name + "__part_" + (parts.length + 1);
-      const names = criteria.slice(i, i + OLLAMA_MAX_CHOICE_CANDIDATES);
-      const partCriteria = Object.fromEntries(names.map(candidate => [
-        candidate,
-        Array.isArray(question.criteria) ? null : question.criteria[candidate],
-      ]));
-      expanded[partName] = { ...question, criteria: partCriteria };
-      parts.push(partName);
-    }
-    splitChoices.push({ name, parts });
-  }
-  return { expanded, splitChoices };
-}
-
-function collapseSplitChoices(reply, splitChoices) {
-  for (const split of splitChoices) {
-    const probabilities = {};
-    let confidence = 0;
-    const partAnswers = split.parts.map(partName => {
-      const answer = reply.answers[partName];
-      if (!answer || !answer.probabilities) throw new Error("Ollama omitted split Choice " + partName);
-      return { partName, answer };
-    });
-    const candidateCount = partAnswers.reduce(
-      (total, part) => total + Object.keys(part.answer.probabilities).length,
-      0
-    );
-    for (const { partName, answer } of partAnswers) {
-      confidence = Math.max(confidence, Number(answer.confidence || 0));
-      const partWeight = Object.keys(answer.probabilities).length / candidateCount;
-      for (const [candidate, probability] of Object.entries(answer.probabilities)) {
-        probabilities[candidate] = probability * partWeight;
-      }
-      delete reply.answers[partName];
-    }
-    const choice = Object.entries(probabilities)
-      .reduce((best, entry) => entry[1] > best[1] ? entry : best)[0];
-    reply.answers[split.name] = { type: "choice", choice, confidence, probabilities };
-  }
-  return reply;
-}
-
-function postNativeBatch(jevRequest, questions, activeRequests) {
-  const body = JSON.stringify({ ...jevRequest, model: ollamaModel, questions });
+function postNativeBatch(jevRequest, activeRequests) {
+  const body = JSON.stringify({ ...jevRequest, model: ollamaModel });
   return new Promise((resolve, reject) => {
     const upstream = ollamaRequest("POST", "/v1/systemone", body, up => {
       const chunks = [];
       up.on("data", chunk => chunks.push(chunk));
+      up.once("error", reject);
       up.on("end", () => {
         const text = Buffer.concat(chunks).toString("utf8");
         let data;
         try {
           data = JSON.parse(text || "{}");
         } catch (error) {
+          if (up.statusCode === 404 && text.trim() === "404 page not found") {
+            resolve({ status: 404, data: { error: "native_endpoint_unavailable" } });
+            return;
+          }
           reject(new Error("invalid JSON from Ollama /v1/systemone"));
           return;
         }
@@ -457,38 +394,43 @@ function postNativeBatch(jevRequest, questions, activeRequests) {
 }
 
 function handleAdaptedNative(jevRequest, res) {
-  const prepared = prepareNativeQuestions(jevRequest.questions);
-  const entries = Object.entries(prepared.expanded);
-  const batches = [];
-  for (let i = 0; i < entries.length; i += OLLAMA_QUESTIONS_PER_BATCH) {
-    batches.push(Object.fromEntries(entries.slice(i, i + OLLAMA_QUESTIONS_PER_BATCH)));
-  }
   const activeRequests = [];
+  let cancelled = false;
   const abort = () => {
-    for (const request of activeRequests) request.destroy();
+    cancelled = true;
+    for (const request of activeRequests) request.destroy(new Error("request cancelled"));
   };
+  const deadline = setTimeout(() => {
+    sendUpstreamError(res, "ollama_error", "upstream timed out after " + OLLAMA_TIMEOUT + "ms");
+    abort();
+  }, OLLAMA_TIMEOUT);
   res.once("close", abort);
-  Promise.all(batches.map(questions => postNativeBatch(jevRequest, questions, activeRequests)))
-    .then(replies => {
-      res.off("close", abort);
-      const unavailable = replies.some(reply => reply.status === 404);
-      if (unavailable) {
-        nativeDecisions = false;
-        chatAdapted(jevRequest, res);
-        return;
-      }
-      const failure = replies.find(reply => reply.status < 200 || reply.status >= 300);
-      if (failure) {
-        sendJson(res, failure.status || 502, failure.data);
-        return;
-      }
+  runNativeDecision({ ...jevRequest, model: ollamaModel }, request => {
+    if (cancelled) throw new Error("request cancelled");
+    return postNativeBatch(request, activeRequests);
+  })
+    .then(reply => {
+      if (cancelled) return;
       nativeDecisions = true;
-      const merged = mergeDecisionReplies(replies.map(reply => reply.data));
-      sendJson(res, 200, collapseSplitChoices(merged, prepared.splitChoices));
+      sendJson(res, 200, reply);
     })
     .catch(error => {
+      if (cancelled) return;
+      abort();
+      if (error instanceof OllamaHttpError && error.data.error === "native_endpoint_unavailable") {
+        clearTimeout(deadline);
+        res.off("close", abort);
+        nativeDecisions = false;
+        chatAdapted(jevRequest, res);
+      } else if (error instanceof OllamaHttpError) {
+        sendJson(res, error.status, error.data);
+      } else {
+        sendUpstreamError(res, "ollama_error", String(error.message));
+      }
+    })
+    .finally(() => {
+      clearTimeout(deadline);
       res.off("close", abort);
-      sendUpstreamError(res, "ollama_error", String(error.message));
     });
 }
 
@@ -497,43 +439,16 @@ function handleOllama(req, res) {
     let jevRequest;
     try {
       jevRequest = JSON.parse(rawBody.toString("utf8"));
+      validateDecisionRequest(jevRequest);
     } catch (error) {
-      sendJson(res, 400, { error: "bad_request", detail: "invalid JSON" });
+      sendJson(res, 400, { error: "bad_request", detail: error.message });
       return;
     }
     if (nativeDecisions === false) {
       chatAdapted(jevRequest, res);
       return;
     }
-    const questions = jevRequest.questions && Object.values(jevRequest.questions);
-    const needsAdaptation = questions && (
-      questions.length > OLLAMA_QUESTIONS_PER_BATCH ||
-      questions.some(question => question && question.type === "choice" &&
-        criteriaNames(question.criteria).length > OLLAMA_MAX_CHOICE_CANDIDATES)
-    );
-    if (needsAdaptation) {
-      handleAdaptedNative(jevRequest, res);
-      return;
-    }
-    jevRequest.model = ollamaModel;
-    const body = JSON.stringify(jevRequest);
-    const upstream = ollamaRequest("POST", "/v1/systemone", body, up => {
-      if (up.statusCode === 404) {
-        nativeDecisions = false;
-        up.resume();
-        chatAdapted(jevRequest, res);
-        return;
-      }
-      if (up.statusCode >= 200 && up.statusCode < 300) nativeDecisions = true;
-      res.writeHead(up.statusCode || 502, {
-        "Content-Type": up.headers["content-type"] || "application/json",
-      });
-      up.pipe(res);
-    });
-    bindUpstream(res, upstream, OLLAMA_TIMEOUT);
-    upstream.on("error", error => {
-      sendUpstreamError(res, "ollama_error", String(error.message));
-    });
+    handleAdaptedNative(jevRequest, res);
   });
 }
 
@@ -564,8 +479,8 @@ async function fetchOllamaVersion() {
   } catch (error) {}
 }
 
-function warmOllama() {
-  const body = JSON.stringify({
+async function warmOllama() {
+  const body = {
     model: ollamaModel,
     state: "warm-up",
     questions: {
@@ -577,13 +492,16 @@ function warmOllama() {
       },
       quality_a: { type: "score", instructions: "Rate a.", criteria: ["bad", "ok", "good"] },
     },
-  });
-  const request = ollamaRequest("POST", "/v1/systemone", body, up => {
-    nativeDecisions = up.statusCode === 200;
+  };
+  try {
+    const reply = await postNativeBatch(body, []);
+    nativeDecisions = !(reply.status === 404 && reply.data.error === "native_endpoint_unavailable");
     console.log(nativeDecisions
       ? "Decision mode: native /v1/systemone"
       : "Decision mode: chat adapter (native endpoint unavailable)");
-    up.resume();
+    if (nativeDecisions && reply.status !== 200) {
+      console.warn("Ollama warm-up failed: HTTP " + reply.status);
+    }
     if (!nativeDecisions) {
       const chatBody = JSON.stringify({
         model: ollamaModel,
@@ -592,13 +510,12 @@ function warmOllama() {
         messages: [{ role: "user", content: "Reply OK." }],
         options: { num_predict: 2 },
       });
-      ollamaRequest("POST", "/api/chat", chatBody, reply => reply.resume());
+      const chatReply = await ollamaJson("POST", "/api/chat", chatBody, OLLAMA_TIMEOUT);
+      if (chatReply.status !== 200) console.warn("Ollama chat warm-up failed: HTTP " + chatReply.status);
     }
-  });
-  request.once("error", error => {
-    nativeDecisions = false;
+  } catch (error) {
     console.warn("Ollama warm-up failed: " + error.message);
-  });
+  }
 }
 
 const server = http.createServer((req, res) => {

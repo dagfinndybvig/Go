@@ -67,6 +67,25 @@ const MARGIN = 30, CELL = (468 - 2 * MARGIN) / (N - 1);
 let board, turn, captures, history, lastMove, lastCoord, jevLastChoice, passes, gameOver;
 let gameGeneration = 0;
 let autoplayRestartTimer = null;
+let whiteTurnTimer = null;
+let whiteRequest = null;
+let promptKomi = 5.5;
+
+function cancelWhiteTurn() {
+  clearTimeout(whiteTurnTimer);
+  whiteTurnTimer = null;
+  whiteRequest = null;
+  Jev.cancel();
+}
+
+function scheduleWhiteMove(delay, retries = 0) {
+  clearTimeout(whiteTurnTimer);
+  const generation = gameGeneration;
+  whiteTurnTimer = setTimeout(() => {
+    whiteTurnTimer = null;
+    if (generation === gameGeneration) jevMove(retries);
+  }, delay);
+}
 
 function newGame() {
   if (autoplayRestartTimer !== null) {
@@ -74,6 +93,7 @@ function newGame() {
     autoplayRestartTimer = null;
   }
   gameGeneration++;
+  cancelWhiteTurn();
   board = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
   turn = BLACK;
   captures = { 1: 0, 2: 0 };
@@ -86,6 +106,7 @@ function newGame() {
   document.getElementById('gameover').style.display = 'none';
   setStatus('Your move — you are Black.');
   draw();
+  refreshHud();
 }
 
 function neighbors(x, y) {
@@ -190,20 +211,53 @@ const Jev = (() => {
   let serverMode = '';
   let serverVersion = '';
   let serverStatusReady = !PROXY;
-  if (PROXY) {
-    fetch('/jevstatus').then(r => r.json())
-      .then(d => {
-        serverKey = !!d.serverKey;
-        serverBackend = d.backend || '';
-        serverMode = d.mode || '';
-        serverVersion = d.version || '';
-        serverStatusReady = true;
-        refreshHud();
-      })
-      .catch(() => {
-        serverStatusReady = true;
-        refreshHud();
-      });
+  let discoveryError = '';
+  let decisionStatus = 'configured';
+  let decisionError = '';
+  let activeController = null;
+  let decisionGeneration = 0;
+
+  function configureBackend(d) {
+    serverKey = !!d.serverKey;
+    serverBackend = d.backend || '';
+    serverMode = d.mode || '';
+    serverVersion = d.version || '';
+    serverStatusReady = true;
+    discoveryError = '';
+    decisionStatus = 'configured';
+    decisionError = '';
+    refreshHud();
+  }
+
+  async function discoverBackend() {
+    serverStatusReady = false;
+    const ctrl = new AbortController();
+    const timeout = setTimeout(() => ctrl.abort(), 5000);
+    try {
+      const response = await fetch('/jevstatus', { signal: ctrl.signal, cache: 'no-store' });
+      if (!response.ok) throw new Error('Backend status HTTP ' + response.status);
+      const d = await response.json();
+      if (!d || typeof d.serverKey !== 'boolean' || typeof d.backend !== 'string') {
+        throw new Error('Invalid backend status response');
+      }
+      configureBackend(d);
+    } catch (error) {
+      discoveryError = error.name === 'AbortError' ? 'Backend discovery timed out' : error.message;
+      serverStatusReady = true;
+      refreshHud();
+    } finally {
+      clearTimeout(timeout);
+    }
+  }
+
+  let discovery = PROXY ? discoverBackend() : Promise.resolve();
+  async function ready() {
+    if (discoveryError) {
+      discoveryError = '';
+      discovery = discoverBackend();
+    }
+    await discovery;
+    if (discoveryError) throw new Error(discoveryError);
   }
 
   function coordName(x, y) { return COLS[x] + (y + 1); }
@@ -228,7 +282,7 @@ const Jev = (() => {
   function buildState() {
     const lastBlack = passes > 0 ? 'pass' : (lastCoord ? coordName(lastCoord.x, lastCoord.y) : 'none');
     return [
-      'W=X, B=O; White to play; area scoring; komi 5.5; two consecutive passes end the game.',
+      'W=X, B=O; White to play; area scoring; White komi ' + promptKomi + '; two consecutive passes end the game.',
       'Captures W/B: ' + captures[WHITE] + '/' + captures[BLACK] + '; consecutive passes: ' + passes + '; last Black: ' + lastBlack + '; last White: ' + (jevLastChoice || 'none/pass') + '.',
       'Board (rows 9 to 1; .=empty):',
       boardText(),
@@ -427,11 +481,12 @@ const Jev = (() => {
       questions,
     };
     const ctrl = new AbortController();
+    activeController = ctrl;
     const timeoutMs = serverBackend.startsWith('ollama:') ? 30000 : 10000;
     const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
-    let resp;
+    let data;
     try {
-      resp = await fetch(ENDPOINT, {
+      const resp = await fetch(ENDPOINT, {
         method: 'POST',
         headers: {
           ...(apiKey ? { 'Authorization': 'Bearer ' + apiKey } : {}),
@@ -440,23 +495,27 @@ const Jev = (() => {
         body: JSON.stringify(body),
         signal: ctrl.signal,
       });
+      const responseText = await resp.text();
+      try {
+        data = JSON.parse(responseText || '{}');
+      } catch (e) {
+        if (resp.ok) throw new Error('invalid JSON response');
+        data = { error: responseText.slice(0, 240) };
+      }
+      if (!resp.ok) {
+        const detail = data && (data.detail || data.error);
+        const error = new Error('HTTP ' + resp.status + (detail ? ': ' + detail : ''));
+        error.retryable = resp.status === 408 || resp.status === 429 || resp.status >= 500;
+        throw error;
+      }
     } catch (e) {
-      throw new Error(e.name === 'AbortError' ? 'timeout' : 'network');
+      if (e.name === 'AbortError') throw new Error('timeout or cancelled request');
+      throw e;
     } finally {
       clearTimeout(timeout);
+      if (activeController === ctrl) activeController = null;
     }
-    const responseText = await resp.text();
-    let data;
-    try {
-      data = JSON.parse(responseText || '{}');
-    } catch (e) {
-      throw new Error(resp.ok ? 'invalid JSON response' : 'HTTP ' + resp.status);
-    }
-    if (!resp.ok) {
-      const detail = data.detail || data.error;
-      throw new Error('HTTP ' + resp.status + (detail ? ': ' + detail : ''));
-    }
-    const answers = data.answers || {};
+    const answers = data && data.answers || {};
     const policy = answers.move;
     const passGate = answers.pass_ok;
     if (!policy || !policy.choice) throw new Error('no Choice answer in response');
@@ -481,13 +540,16 @@ const Jev = (() => {
       usage: data.usage || null,
       model: data.model || MODEL,
       state: stateStr,
+      selection: policy.selection || 'direct',
+      probabilityScope: policy.probabilityScope || 'all-candidates',
     };
   }
 
-  async function chooseMove(moves) {
+  async function selectMove(moves, generation) {
     // Ollama uses the complete Choice plus Noul directly so interactive play
     // stays responsive. TypeSafe also supplies a Score for every candidate.
     const res = await query(moves);
+    if (generation !== decisionGeneration) throw new Error('Cancelled decision');
     const policyProbability = name => {
       if (res.probabilities && Number.isFinite(res.probabilities[name])) return res.probabilities[name];
       return res.choice === name ? 1 : 0;
@@ -496,10 +558,13 @@ const Jev = (() => {
     if (!Object.keys(res.scores).length) {
       const legalNames = moves.map(m => coordName(m.x, m.y));
       if (passAllowed) legalNames.push('pass');
-      const picked = legalNames.includes(res.choice)
-        ? res.choice
-        : legalNames.reduce((best, name) => policyProbability(name) > policyProbability(best) ? name : best);
-      addLog({ t: Date.now(), ok: true, choice: picked, jevChoice: res.choice, confidence: res.confidence, probabilities: res.probabilities, passProbability: res.passProbability, passAllowed, scores: null, usage: res.usage, model: res.model, state: res.state });
+      const allNames = [...moves.map(m => coordName(m.x, m.y)), 'pass'];
+      if (!allNames.includes(res.choice)) throw new Error('Decision model chose an illegal point: ' + res.choice);
+      const ranked = legalNames.filter(name => res.probabilities && Number.isFinite(res.probabilities[name]));
+      if (!ranked.length) throw new Error('No probabilities for an allowed legal move');
+      const picked = ranked.reduce((best, name) => policyProbability(name) > policyProbability(best) ? name : best,
+        ranked.includes(res.choice) ? res.choice : ranked[0]);
+      addLog({ t: Date.now(), ok: true, choice: picked, jevChoice: res.choice, confidence: res.confidence, probabilities: res.probabilities, passProbability: res.passProbability, passAllowed, scores: null, usage: res.usage, model: res.model, state: res.state, selection: res.selection, probabilityScope: res.probabilityScope });
       return picked;
     }
     const candidates = moves.map(m => {
@@ -518,13 +583,43 @@ const Jev = (() => {
     return picked;
   }
 
+  async function chooseMove(moves) {
+    const generation = decisionGeneration;
+    await ready();
+    if (generation !== decisionGeneration) throw new Error('Cancelled decision');
+    decisionStatus = 'thinking';
+    decisionError = '';
+    refreshHud();
+    try {
+      const result = await selectMove(moves, generation);
+      decisionStatus = 'succeeded';
+      refreshHud();
+      return result;
+    } catch (error) {
+      if (generation === decisionGeneration) {
+        decisionStatus = 'error';
+        decisionError = error.message;
+        refreshHud();
+      }
+      throw error;
+    }
+  }
+
   return {
     chooseMove,
+    ready,
+    configureBackend,
+    cancel() {
+      decisionGeneration++;
+      if (activeController) activeController.abort();
+      decisionStatus = 'configured';
+      decisionError = '';
+    },
     coordName,
     isEnabled() { return !!(apiKey || serverKey); },
     isProxied() { return PROXY; },
     getBackend() { return serverBackend; },
-    getInfo() { return { mode: serverMode, version: serverVersion, ready: serverStatusReady }; },
+    getInfo() { return { mode: serverMode, version: serverVersion, ready: serverStatusReady, status: decisionStatus, error: discoveryError || decisionError }; },
     displayName() { return serverBackend.startsWith('ollama:') ? 'Ollama' : 'Jev'; },
     errorHelp() {
       return serverBackend.startsWith('ollama:')
@@ -536,6 +631,8 @@ const Jev = (() => {
     clearLog() { log.length = 0; },
     setKey(key) {
       apiKey = key || '';
+      decisionStatus = 'configured';
+      decisionError = '';
       try { localStorage.setItem('typesafe_api_key', apiKey); } catch (e) {}
     },
     getKey() { return apiKey; },
@@ -610,7 +707,7 @@ function applyMove(m, color) {
   draw();
   if (color === BLACK) {
     setStatus(labels().white + ' (White) is thinking...');
-    setTimeout(jevMove, autoplay ? AUTO_DELAY : 350);
+    scheduleWhiteMove(autoplay ? AUTO_DELAY : 350);
   } else if (autoplay) {
     const L = labels();
     setStatus(L.white + ' (White) played. ' + L.black + ' (Black) is thinking...');
@@ -631,40 +728,40 @@ function blackAutoMove() {
 }
 
 // White's turn: Jev plays. No fallback to the local heuristic.
-function jevMove(retries) {
-  if (gameOver || turn !== WHITE) return;
-  if (retries === undefined) retries = 0;
+async function jevMove(retries = 0) {
+  if (gameOver || turn !== WHITE || whiteRequest) return;
   const requestGeneration = gameGeneration;
-  const moves = legalMoves(board, WHITE, lastMove);
-  if (!moves.length) { doPass(WHITE); return; }
-  if (!Jev.isEnabled()) {
-    // No key: fall back to the local heuristic so the game keeps playing.
-    // (This is the only fallback — low confidence and errors still retry.)
-    setHud(false);
-    const pick = heuristicPick(moves, WHITE);
-    if (pick.pass) { doPass(WHITE); return; }
-    setStatus('Local AI (White) is playing (no Jev API key).');
-    applyMove(pick.move, WHITE);
-    return;
-  }
-  setHud(true);
-  const decisionName = labels().white;
+  const request = {};
+  whiteRequest = request;
+  const isCurrent = () => !gameOver && requestGeneration === gameGeneration && turn === WHITE && whiteRequest === request;
   const startedAt = Date.now();
-  const progress = setInterval(() => {
-    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) {
-      clearInterval(progress);
+  let progress;
+  try {
+    setStatus('Checking White decision backend...');
+    await Jev.ready();
+    if (!isCurrent()) return;
+    const moves = legalMoves(board, WHITE, lastMove);
+    if (!moves.length) { doPass(WHITE); return; }
+    if (!Jev.isEnabled()) {
+      setHud(false);
+      const pick = heuristicPick(moves, WHITE);
+      if (pick.pass) doPass(WHITE);
+      else applyMove(pick.move, WHITE);
       return;
     }
-    setStatus(decisionName + ' (White) is thinking... ' + ((Date.now() - startedAt) / 1000).toFixed(1) + 's');
-  }, 100);
-  setStatus(decisionName + ' (White) is thinking... 0.0s');
-  Jev.chooseMove(moves).then(sel => {
-    clearInterval(progress);
-    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
+    setHud(true);
+    const decisionName = labels().white;
+    progress = setInterval(() => {
+      if (isCurrent()) setStatus(decisionName + ' (White) is thinking... ' + ((Date.now() - startedAt) / 1000).toFixed(1) + 's');
+      else clearInterval(progress);
+    }, 100);
+    setStatus(decisionName + ' (White) is thinking...');
+    const sel = await Jev.chooseMove(moves);
+    if (!isCurrent()) return;
     const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
     if (sel === 'pass') {
       doPass(WHITE);
-      if (!autoplay) setStatus(decisionName + ' passed in ' + elapsed + 's — your move.');
+      if (!autoplay && !gameOver) setStatus(decisionName + ' passed in ' + elapsed + 's — your move.');
       return;
     }
     const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
@@ -672,30 +769,21 @@ function jevMove(retries) {
       applyMove(m, WHITE);
       if (!autoplay) setStatus(decisionName + ' played ' + sel + ' in ' + elapsed + 's — your move.');
     }
-    else if (retries < 3) {
-      Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel, choice: sel, confidence: null, state: null, probabilities: null });
-      setStatus('Jev returned an illegal move — retrying...');
-      setTimeout(() => {
-        if (requestGeneration === gameGeneration) jevMove(retries + 1);
-      }, 1000);
-    } else {
-      Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel + ' after ' + retries + ' retries', choice: sel, confidence: null, state: null, probabilities: null });
-      setStatus('Decision error — illegal move.' + Jev.errorHelp());
-    }
-  }).catch(err => {
-    clearInterval(progress);
-    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
+    else throw new Error('Decision model chose an illegal point: ' + sel);
+  } catch (err) {
+    if (!isCurrent()) return;
     const reason = err && err.message ? err.message : String(err);
     Jev.logEntry({ t: Date.now(), ok: false, reason, choice: null, confidence: null, state: null, probabilities: null });
-    if (retries < 3) {
-      setStatus('Jev error (' + reason + ') — retrying...');
-      setTimeout(() => {
-        if (requestGeneration === gameGeneration) jevMove(retries + 1);
-      }, 1000);
+    if (retries < 3 && err.retryable !== false) {
+      setStatus('Decision error (' + reason + ') — retrying...');
+      scheduleWhiteMove(1000, retries + 1);
     } else {
       setStatus('Decision error after ' + (retries + 1) + ' attempts: ' + reason + '.' + Jev.errorHelp());
     }
-  });
+  } finally {
+    clearInterval(progress);
+    if (whiteRequest === request) whiteRequest = null;
+  }
 }
 
 function doPass(color) {
@@ -716,8 +804,8 @@ function doPass(color) {
     turn = WHITE;
     draw();
     const L = labels();
-    if (autoplay) { setStatus(L.black + ' (Black) passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, AUTO_DELAY); }
-    else { setStatus('You passed. ' + L.white + ' (White) is thinking...'); setTimeout(jevMove, 350); }
+    if (autoplay) { setStatus(L.black + ' (Black) passed. ' + L.white + ' (White) is thinking...'); scheduleWhiteMove(AUTO_DELAY); }
+    else { setStatus('You passed. ' + L.white + ' (White) is thinking...'); scheduleWhiteMove(350); }
   }
 }
 
@@ -779,6 +867,7 @@ function endGame() {
 function undo() {
   if (!history.length || gameOver || autoplay) return;
   gameGeneration++;
+  cancelWhiteTurn();
   let h;
   do {
     h = history.pop();
@@ -794,6 +883,7 @@ function undo() {
   document.getElementById('gameover').style.display = 'none';
   setStatus('Your move — you are Black.');
   draw();
+  refreshHud();
 }
 
 function setStatus(t) { document.getElementById('status').textContent = t; }
@@ -888,22 +978,29 @@ function setHud(enabled) {
   if (enabled && backend.startsWith('ollama:')) {
     const detail = [info.version ? 'v' + info.version : '', info.mode || ''].filter(Boolean).join(', ');
     el.textContent = 'WHITE: OLLAMA ' + backend.slice(7) + (detail ? ' (' + detail + ')' : '');
-    statusEl.textContent = '● Ollama connected — ' + backend.slice(7) + (detail ? ' · ' + detail : '');
-    statusEl.className = 'ready';
   } else if (enabled) {
     el.textContent = 'WHITE: JEV';
-    statusEl.textContent = '● TypeSafe Jev connected';
-    statusEl.className = 'ready';
-  } else if (!info.ready) {
-    el.textContent = 'WHITE: CHECKING...';
-    statusEl.textContent = '● Checking decision backend...';
-    statusEl.className = '';
   } else {
     el.textContent = 'WHITE: ' + labels().white.toUpperCase();
+  }
+  if (info.error) {
+    statusEl.textContent = 'Decision backend error — ' + info.error;
+    statusEl.className = 'offline';
+  } else if (!info.ready) {
+    statusEl.textContent = '● Checking decision backend...';
+    statusEl.className = '';
+  } else if (enabled) {
+    const name = backend.startsWith('ollama:') ? 'Ollama ' + backend.slice(7) : 'TypeSafe Jev';
+    const status = info.status === 'succeeded' ? 'last decision succeeded'
+      : info.status === 'thinking' ? 'request in progress'
+      : 'configured (not yet verified)';
+    statusEl.textContent = name + ' — ' + status;
+    statusEl.className = info.status === 'succeeded' ? 'ready' : '';
+  } else {
     statusEl.textContent = '○ No decision backend — White uses Local AI';
     statusEl.className = 'offline';
   }
-  el.style.color = enabled ? '#4caf50' : '#e53935';
+  el.style.color = info.error || !enabled ? '#e53935' : info.status === 'succeeded' ? '#4caf50' : '#ffd54f';
   updateScoreLine();
   updateMatchup();
 }
