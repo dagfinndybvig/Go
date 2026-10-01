@@ -734,8 +734,6 @@ async function jevMove(retries = 0) {
   const request = {};
   whiteRequest = request;
   const isCurrent = () => !gameOver && requestGeneration === gameGeneration && turn === WHITE && whiteRequest === request;
-  const startedAt = Date.now();
-  let progress;
   try {
     setStatus('Checking White decision backend...');
     await Jev.ready();
@@ -751,23 +749,18 @@ async function jevMove(retries = 0) {
     }
     setHud(true);
     const decisionName = labels().white;
-    progress = setInterval(() => {
-      if (isCurrent()) setStatus(decisionName + ' (White) is thinking... ' + ((Date.now() - startedAt) / 1000).toFixed(1) + 's');
-      else clearInterval(progress);
-    }, 100);
     setStatus(decisionName + ' (White) is thinking...');
     const sel = await Jev.chooseMove(moves);
     if (!isCurrent()) return;
-    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
     if (sel === 'pass') {
       doPass(WHITE);
-      if (!autoplay && !gameOver) setStatus(decisionName + ' passed in ' + elapsed + 's — your move.');
+      if (!autoplay && !gameOver) setStatus(decisionName + ' passed — your move.');
       return;
     }
     const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
     if (m) {
       applyMove(m, WHITE);
-      if (!autoplay) setStatus(decisionName + ' played ' + sel + ' in ' + elapsed + 's — your move.');
+      if (!autoplay) setStatus(decisionName + ' played ' + sel + ' — your move.');
     }
     else throw new Error('Decision model chose an illegal point: ' + sel);
   } catch (err) {
@@ -781,7 +774,6 @@ async function jevMove(retries = 0) {
       setStatus('Decision error after ' + (retries + 1) + ' attempts: ' + reason + '.' + Jev.errorHelp());
     }
   } finally {
-    clearInterval(progress);
     if (whiteRequest === request) whiteRequest = null;
   }
 }

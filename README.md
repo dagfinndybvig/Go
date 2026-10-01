@@ -240,9 +240,9 @@ The HUD shows who is playing at all times:
 - **red WHITE: LOCAL AI** — no backend is configured; the local
   heuristic is playing White
 
-After you place Black, the status line counts how long White has been
-thinking. When White finishes it reports the coordinate and elapsed
-time, for example `Ollama played B7 in 1.1s — your move.` Backend errors
+After you place Black, the status line says White is thinking, without a
+timer. When White finishes it reports the coordinate, for example
+`Ollama played B7 — your move.` Backend errors
 include the upstream HTTP detail instead of only a status number.
 
 ### Starting, stopping, restarting the server

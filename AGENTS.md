@@ -67,8 +67,7 @@ There is no test framework. Tests are throwaway Node scripts using
   `setTimeout` (sleep ~600ms+ after a Black move). Jev's fetch uses a
   10s `AbortController` timeout — polyfill `AbortController` in the vm
   context when testing `Jev.chooseMove`.
-- Prefer `await Jev.ready()` to a fixed discovery sleep. The VM needs
-  `setInterval`/`clearInterval` for the progress timer. Tests must cover
+- Prefer `await Jev.ready()` to a fixed discovery sleep. Tests must cover
   multiple White turns: 79 actions previously produced an invalid singleton.
 - The heuristic has random tie-breaking (`Math.random() * 2` in the
   score). Never assert a specific move choice — assert stone counts.

@@ -863,10 +863,10 @@ Ollama or TypeSafe backend.
   matchups — you vs Ollama/TypeSafe decision AI, you vs local AI, local
   AI vs decision AI, or local AI vs local AI — and the keys/buttons
   that switch them.
-- **Status line** (top): whose turn it is, a live elapsed timer while
-  the decision backend is thinking, the completed move and elapsed
-  time, detailed HTTP errors, illegal move reasons, retry status, and
-  the game result.
+- **Status line** (top): whose turn it is, whether the decision backend
+  is thinking, the completed move, detailed HTTP errors, illegal move
+  reasons, retry status, and the game result. No timer or elapsed time
+  is displayed.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
 - **`WHITE: OLLAMA ...` / `WHITE: JEV` / `WHITE: LOCAL AI`**

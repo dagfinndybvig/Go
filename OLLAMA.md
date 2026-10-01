@@ -52,8 +52,8 @@ OLLAMA_MODEL=nimble-go node server.js
 Open **http://localhost:3000**. The indicator under the title starts at
 `configured (not yet verified)`, shows requests in progress, and turns
 green only after a successful decision. Errors appear in red; a configured
-model is not a health check. After Black moves, the status line shows a
-live thinking timer and then White's coordinate and elapsed time.
+model is not a health check. After Black moves, the status line says
+White is thinking and then shows White's coordinate, without a timer.
 
 The stock `nimble:latest` model is configured for only 8194 tokens. That
 is enough for sparse positions but dense tactical positions can exceed
