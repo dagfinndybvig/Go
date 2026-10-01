@@ -60,8 +60,10 @@ const EMPTY = 0, BLACK = 1, WHITE = 2;
 const MARGIN = 30, CELL = (468 - 2 * MARGIN) / (N - 1);
 
 let board, turn, captures, history, lastMove, lastCoord, jevLastChoice, passes, gameOver;
+let gameGeneration = 0;
 
 function newGame() {
+  gameGeneration++;
   board = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
   turn = BLACK;
   captures = { 1: 0, 2: 0 };
@@ -565,6 +567,7 @@ function blackAutoMove() {
 function jevMove(retries) {
   if (gameOver || turn !== WHITE) return;
   if (retries === undefined) retries = 0;
+  const requestGeneration = gameGeneration;
   const moves = legalMoves(board, WHITE, lastMove);
   if (!moves.length) { doPass(WHITE); return; }
   if (!Jev.isEnabled()) {
@@ -580,24 +583,29 @@ function jevMove(retries) {
   setHud(true);
   setStatus(labels().white + ' (White) is thinking...');
   Jev.chooseMove(moves).then(sel => {
-    if (gameOver) return;
+    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
     if (sel === 'pass') { doPass(WHITE); return; }
     const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
     if (m) applyMove(m, WHITE);
     else if (retries < 3) {
       Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel, choice: sel, confidence: null, state: null, probabilities: null });
       setStatus('Jev returned an illegal move — retrying...');
-      setTimeout(() => jevMove(retries + 1), 1000);
+      setTimeout(() => {
+        if (requestGeneration === gameGeneration) jevMove(retries + 1);
+      }, 1000);
     } else {
       Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel + ' after ' + retries + ' retries', choice: sel, confidence: null, state: null, probabilities: null });
       setStatus('Jev error — illegal move. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
     }
   }).catch(err => {
+    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
     const reason = err && err.message ? err.message : String(err);
     Jev.logEntry({ t: Date.now(), ok: false, reason, choice: null, confidence: null, state: null, probabilities: null });
     if (retries < 3) {
       setStatus('Jev error (' + reason + ') — retrying...');
-      setTimeout(() => jevMove(retries + 1), 1000);
+      setTimeout(() => {
+        if (requestGeneration === gameGeneration) jevMove(retries + 1);
+      }, 1000);
     } else {
       setStatus('Jev error after ' + (retries + 1) + ' attempts: ' + reason + '. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
     }
@@ -676,6 +684,7 @@ function endGame() {
 
 function undo() {
   if (!history.length || gameOver || autoplay) return;
+  gameGeneration++;
   const h = history.pop();
   board = h.board;
   captures = h.captures;

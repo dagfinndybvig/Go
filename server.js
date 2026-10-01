@@ -14,6 +14,7 @@ const HOST = process.env.HOST || "127.0.0.1";
 // Jev requests are tens of KB (state text plus up to ~84 questions); anything
 // larger is not a game move, so refuse instead of buffering it.
 const MAX_PROXY_BODY = 262144; // 256 KB
+const PROXY_TIMEOUT = 15000;
 const TS_HOST = "api.typesafe.ai";
 const TS_PATH = "/v1/systemone";
 
@@ -82,6 +83,21 @@ function proxyJev(req, res) {
   const chunks = [];
   let size = 0;
   let tooLarge = false;
+  let upstream = null;
+  let timedOut = false;
+  const timeout = () => {
+    timedOut = true;
+    if (!res.headersSent) {
+      res.writeHead(504, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "proxy_timeout" }));
+    }
+    if (upstream) upstream.destroy();
+    else req.destroy();
+  };
+  req.setTimeout(PROXY_TIMEOUT, timeout);
+  req.on("aborted", () => {
+    if (upstream) upstream.destroy();
+  });
   req.on("data", (c) => {
     if (tooLarge) return; // keep draining, but stop buffering
     size += c.length;
@@ -89,6 +105,7 @@ function proxyJev(req, res) {
     chunks.push(c);
   });
   req.on("end", () => {
+    req.setTimeout(0);
     if (tooLarge) {
       res.writeHead(413, { "Content-Type": "application/json" });
       res.end(JSON.stringify({ error: "payload_too_large", limitBytes: MAX_PROXY_BODY }));
@@ -104,18 +121,28 @@ function proxyJev(req, res) {
     if (auth) headers["Authorization"] = auth;
     else if (ENV_KEY) headers["Authorization"] = "Bearer " + ENV_KEY;
 
-    const upstream = https.request(
+    upstream = https.request(
       { host: TS_HOST, path: TS_PATH, method: "POST", headers },
       (up) => {
+        up.setTimeout(PROXY_TIMEOUT, () => {
+          timedOut = true;
+          up.destroy(new Error("upstream timeout"));
+        });
         res.writeHead(up.statusCode || 502, {
           "Content-Type": up.headers["content-type"] || "application/json",
         });
         up.pipe(res);
       }
     );
+    upstream.setTimeout(PROXY_TIMEOUT, () => {
+      timedOut = true;
+      upstream.destroy(new Error("upstream timeout"));
+    });
     upstream.on("error", (e) => {
-      res.writeHead(502, { "Content-Type": "application/json" });
-      res.end(JSON.stringify({ error: "proxy_error", detail: String(e.message) }));
+      if (!res.headersSent) {
+        res.writeHead(timedOut ? 504 : 502, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: timedOut ? "proxy_timeout" : "proxy_error", detail: String(e.message) }));
+      }
     });
     upstream.end(body);
   });

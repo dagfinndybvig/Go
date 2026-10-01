@@ -296,7 +296,7 @@ function loadGame(apiKey) {
     document, window: {}, localStorage: { getItem: () => null, setItem: noop },
     location: { hostname: 'benchmark.invalid' },
     fetch: trackedFetch, Math: math, console: { log: noop, warn: noop, error: noop },
-    setTimeout, clearTimeout, AbortController,
+    setTimeout, clearTimeout, AbortController, AbortSignal,
   };
   vm.runInNewContext(match[1] + shim, context, { filename: 'jev-go.html' });
   const engine = context.__benchmark;
