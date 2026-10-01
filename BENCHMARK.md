@@ -29,7 +29,7 @@ scoring, simple ko, and 5.5 komi for actual White.
 
 The runner reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` from the
 environment or local `.env` without printing it. It requires Node.js with
-global `fetch` support.
+global `fetch` and `AbortSignal.timeout` support (Node.js 18 or newer).
 
 ```sh
 node benchmark.js --pairs 10

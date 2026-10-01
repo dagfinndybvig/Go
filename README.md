@@ -219,7 +219,9 @@ $env:HOST="0.0.0.0"; node server.js
 The startup banner prints the address it is listening on. The proxy
 also refuses `/jev` request bodies over 256 KB with HTTP `413` (real
 Jev requests are tens of KB), so oversized uploads cannot exhaust
-memory.
+memory. Requests and upstream API calls are bounded at 15 seconds; an
+unresponsive request returns HTTP `504` instead of remaining open
+indefinitely.
 
 **If the server stops mid-game** — Jev's move requests fail and the
 game retries up to 3 times before showing an error; White waits rather
@@ -229,6 +231,9 @@ running again, Jev resumes automatically on White's next turn — no page
 reload needed, as long as the server had a key when the page was
 loaded. If the page was loaded while the server was down, either reload
 the page after starting the server, or press `J` and enter a key.
+Starting a new game or using **Undo** also invalidates any pending Jev
+response, so a late response from the previous position cannot play
+into the new game.
 
 ## How it works
 

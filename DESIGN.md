@@ -856,7 +856,9 @@ none (a browser key always wins). The server key may come from either
 binds to `127.0.0.1` by default so the LAN cannot reach the proxy and
 spend the server key; `HOST=0.0.0.0` opts into LAN exposure deliberately.
 `/jev` request bodies over 256 KB are refused with `413` instead of
-being buffered in memory.
+being buffered in memory. Request-body reads and upstream HTTPS calls have
+15-second timeouts; timed-out requests return `504` and the upstream is
+destroyed.
 
 ### Server lifecycle
 
@@ -880,6 +882,8 @@ automatically on White's next turn, provided the server had a key when
 the page was loaded (`serverKey` is detected once at startup). If the
 page was loaded while the server was down, reload the page after
 starting the server, or press `J` and enter a key.
+Each Jev request carries the current game generation; starting a new game
+or undoing invalidates older responses and scheduled retries.
 
 ### Constants
 
