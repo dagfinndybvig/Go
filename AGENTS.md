@@ -5,12 +5,12 @@ Notes for coding agents working in this repo. Read this before editing.
 ## What this is
 
 A 9x9 Go game (`jev-go.html`, single file, no dependencies) whose White
-stones are played by the TypeSafe "System One" decision model (Jev)
-when an API key is available, with a local greedy heuristic as fallback
-when no key is set. A local greedy heuristic drives Black in autoplay
-mode. `server.js` is a zero-dependency Node proxy that makes Jev work
-locally. `benchmark.js` runs paired, color-balanced rating matches
-against fixed opponent anchors. See DESIGN.md for architecture and
+stones are played by TypeSafe Jev or a compatible local Ollama decision
+model, with a local greedy heuristic when neither backend exists. A
+local greedy heuristic drives Black in autoplay mode. `server.js` is a
+zero-dependency Ollama/TypeSafe proxy. `benchmark.js` runs paired,
+color-balanced rating matches against fixed opponent anchors. See
+OLLAMA.md for local-model setup, DESIGN.md for architecture, and
 README.md for usage.
 
 ## Gotchas
@@ -95,6 +95,19 @@ There is no test framework. Tests are throwaway Node scripts using
   and kill the holder (`taskkill /F /PID <pid>`) before starting.
 - Static files are read per request: `jev-go.html` changes need no
   restart; `server.js` changes do.
+- Backend precedence is explicit `OLLAMA_MODEL`, then a TypeSafe key,
+  then the first context-compatible Ollama model auto-detected from
+  `/api/tags` plus `/api/show`. Native
+  Ollama `/v1/systemone` is preferred; older versions use a generalized
+  chat adapter that must return every Choice, Noul, and Score field.
+  `OLLAMA_HOST` supports HTTP and HTTPS.
+- Ollama native limits are lower than Go's contract: at most 64
+  questions and 26 candidates per Choice. The server and benchmark use
+  44-question batches and split/recombine large Choice distributions;
+  never truncate the legal move list. Go's empty-board prompt is about
+  8K tokens, so auto-detection prefers models configured with
+  `num_ctx >= 8192`. Browser/server Ollama timeouts are 30s; TypeSafe
+  keeps its 10s/15s limits.
 - When testing the live API through the proxy, start the server with
   `tools.process.start` (background), not a foreground bash call — a
   foreground call blocks until timeout.
@@ -128,14 +141,14 @@ There is no test framework. Tests are throwaway Node scripts using
   was fixed; don't reintroduce it.) `lastCoord` is the display/state-text
   coordinate. Keep both updated in `applyMove` and `doPass`;
   `benchmark.js` mirrors the same semantics in `playGame`.
-- White is Jev when an API key is available (browser key or server
-  key). Without a key, White falls back to the local heuristic — the
-  game keeps playing. There is no fallback on low confidence or errors:
+- White is the selected decision backend (Ollama or TypeSafe) when one
+  is available. Without a backend, White falls back to the local
+  heuristic. There is no fallback on low confidence or errors:
   `jevMove` retries up to 3 times (10s timeout per attempt); if all
   retries fail it shows an error message and does not play a move. The
-  HUD (`setHud`), score line, and matchup line show "Jev" or "Local AI"
-  for White depending on `Jev.isEnabled()`. `labels()` takes no
-  parameters — it checks `Jev.isEnabled()` internally.
+  HUD (`setHud`), score line, and matchup line show "Ollama", "Jev", or
+  "Local AI" for White. `labels()` takes no parameters and checks the
+  selected backend internally.
 - `chooseMove` receives every legal move. The Choice criteria contain
   every legal point plus `pass`; `buildState` supplies the compact board
   and coordinate legend, and the argmax considers the full legal set.
@@ -173,6 +186,10 @@ There is no test framework. Tests are throwaway Node scripts using
   (each pair counted by the sign of its combined margin, which cancels
   the color advantage). Judge prompt variants by the seed-paired
   p-value, not raw win rates.
+- Benchmark Ollama mode rewrites both retained policy request paths to
+  `<OLLAMA_HOST>/v1/systemone`, replaces only the model name, and never
+  sends a TypeSafe authorization header. It requires native mode; do not
+  compare chat-adapter synthetic probabilities with native benchmarks.
 
 - For the optional KataGo anchor, `genmove` advances KataGo's GTP board itself;
   only send GTP `play` commands for Jev's moves. Reset board size, komi, rules,

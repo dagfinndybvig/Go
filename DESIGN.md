@@ -6,12 +6,13 @@ decision model.
 
 ## Overview
 
-The player is Black; the machine is White. White is driven by Jev when
-an API key is available, with a local greedy heuristic as fallback when
-no key is set. The heuristic also drives Black in autoplay mode, so you
-can watch Jev's decisions against a greedy captures-and-liberties
-baseline. The local heuristic is deliberately kept simple — no sequence
-reading, no territory estimation — as a baseline for comparison.
+The player is Black; the machine is White. White is driven by the
+TypeSafe Jev API or a compatible local Ollama decision model, with a
+local greedy heuristic as fallback when neither backend is available.
+The heuristic also drives Black in autoplay mode, so you can watch the
+decision model against a greedy captures-and-liberties baseline. The
+local heuristic is deliberately kept simple — no sequence reading, no
+territory estimation — as a baseline for comparison.
 
 This design is inspired by, and follows the architecture of,
 [*Fight*](https://github.com/dagfinndybvig/Fight) — a one-on-one karate
@@ -19,10 +20,11 @@ game in the same Arcade collection whose AI opponent is also driven by
 Jev. The Jev integration pattern (local CORS proxy, state text, `Choice`
 question, argmax move selection) and the autoplay and log-panel concepts
 originate there; this repo adapts them to Go's turn-based flow. Unlike
-Fight, Jev plays its best move here (argmax over the distribution)
-rather than a temperature-sampled one. There is no fallback on low
-confidence or errors — Jev retries instead. The only fallback is when
-no API key is set: the local heuristic plays White.
+Fight, the decision model plays its best move here (argmax over the
+distribution) rather than a temperature-sampled one. There is no
+fallback on low confidence or errors — requests retry instead. The only
+fallback is when no decision backend exists: the local heuristic plays
+White.
 
 ### Why Jev is weak at Go
 
@@ -644,24 +646,28 @@ territory or influence estimation, no life-and-death judgment, no
 concept of eye shape. It plays legal, plausible-looking moves at roughly
 beginner strength.
 
-### Jev AI (TypeSafe System One)
+### Jev-compatible decision AI
 
-White's moves are chosen by Jev when an API key is available — a typed
-decision model that returns choices with probability distributions
-instead of generating text. Without a key, White falls back to the
-local heuristic.
+White's moves are chosen by TypeSafe Jev or an Ollama model through the
+same typed contract. Native Ollama mode returns the Choice, Noul, and
+Score outputs directly; older Ollama versions use the server's
+JSON-schema chat adapter. Without either backend, White falls back to
+the local heuristic.
 
-- **Endpoint**: `POST /jev` (proxied) or `POST
-  https://api.typesafe.ai/v1/systemone` (direct)
-- **Model**: `jev-latest`
+- **Browser endpoint**: `POST /jev` when served locally
+- **Upstream**: TypeSafe `/v1/systemone`, Ollama `/v1/systemone`, or
+  Ollama `/api/chat` through the compatibility adapter
+- **Model**: `jev-latest` on TypeSafe; `OLLAMA_MODEL` (or the
+  auto-detected first context-compatible installed model) on Ollama
 - **Outputs**: one `Choice`, one `Noul`, and a `Score` for each legal
   point plus pass (up to 84 outputs on a 9x9 board)
-- **Fetch timeout**: 10s via `AbortController`
+- **Fetch timeout**: 10s for TypeSafe, 30s for Ollama, via
+  `AbortController`
 - **Retry**: on error or timeout, `jevMove` retries up to 3 times (1s
   between attempts). If all retries fail, an error message is shown and
   no move is played — the game waits.
 
-#### State sent to Jev
+#### State sent to the decision model
 
 `buildEvaluationState()` assembles a compact text description plus
 candidate move deltas:
@@ -726,12 +732,11 @@ the game does not search opponent replies or build an MCTS tree.
 
 #### Error handling
 
-There is no fallback on low confidence or errors — Jev retries instead.
-The only fallback is when no API key is set:
+There is no fallback on low confidence or backend errors — the game
+retries instead. The only fallback is when no decision backend exists:
 
-- No API key: the HUD shows "WHITE: LOCAL AI" and White is played by
-  the local heuristic. The game continues — White does not stall. Press
-  `J` to enter a key and switch to Jev.
+- No Ollama model or TypeSafe key: the HUD shows "WHITE: LOCAL AI" and
+  White is played by the local heuristic. The game continues.
 - Timeout (10s) or network error: `jevMove` retries up to 3 times with
   1s between attempts. If all retries fail, an error message is shown
   and the game waits — it does not substitute the heuristic.
@@ -740,25 +745,25 @@ The only fallback is when no API key is set:
 Every error is logged with its reason; every successful decision is
 logged with both Jev's original pick and the played pick.
 
-## When you can play against Jev
+## When you can use a decision model
 
-Jev's availability depends entirely on how the game is served, because
-the TypeSafe API does not send CORS headers:
+Decision AI depends on the local server. The TypeSafe API does not send
+CORS headers, and browsers do not call Ollama directly:
 
-| How you open the game | Jev? | Why |
+| How you open the game | Decision AI? | Why |
 | --- | --- | --- |
-| `file://` (double-click `jev-go.html`) | No — CORS blocks it | The game tries the API directly with your browser key, but browsers block cross-origin calls from `file://`. Without a key, White is played by the local heuristic. Run `node server.js` to use Jev. |
-| `http://localhost:3000` (`node server.js`) | Yes, if a key exists | The proxy forwards `POST /jev` server-side. The server reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` from its environment or `.env`; a browser key entered with `J` also works and takes precedence. |
-| Hosted (GitHub Pages) | No — CORS blocks it | The game tries the API directly with your browser key, but the API sends no CORS headers (`access-control-allow-origin: null`), so the browser blocks the call. Without a key, White is played by the local heuristic. Run `node server.js` locally to use Jev. |
+| `file://` (double-click `jev-go.html`) | No | There is no local `/jev` server. White uses the heuristic. |
+| `http://localhost:3000` (`node server.js`) | Yes, with Ollama or a TypeSafe key | Explicit `OLLAMA_MODEL` wins; otherwise a TypeSafe key wins; without a key, the first installed Ollama model is auto-detected. |
+| Hosted (GitHub Pages) | No | There is no proxy, and direct TypeSafe calls are blocked by CORS. Run `node server.js` locally. |
 
 The HUD in the bottom-right corner reflects this at all times:
 
-- **green `WHITE: JEV`** — Jev is enabled and choosing White's moves
-- **red `WHITE: LOCAL AI`** — no API key set; the local heuristic is
-  playing White
+- **green `WHITE: OLLAMA <model> (version, mode)`** or
+  **`WHITE: JEV`** — a decision backend is choosing White's moves
+- **red `WHITE: LOCAL AI`** — no backend exists
 
-`GET /jevstatus` reports `{ serverKey: true/false }`; the game polls it
-once at startup to enable Jev without a browser key.
+`GET /jevstatus` reports `serverKey`, `backend`, `mode`, and `version`;
+the game polls it once at startup to enable and label the backend.
 
 ## Autoplay modes
 
@@ -766,29 +771,27 @@ There are two play modes, toggled with **0**:
 
 ### Manual mode (default)
 
-You click to place Black stones; White is Jev. Pass and Undo work.
-Clicks during White's turn or after game over are ignored. Without an
-API key, White is played by the local heuristic — press `J` to enter
-one and switch to Jev.
+You click to place Black stones; White is the active decision model.
+Pass and Undo work. Clicks during White's turn or after game over are
+ignored. Without a backend, White is played by the local heuristic.
 
 ### Autoplay mode
 
-Jev (White) plays against the local heuristic (Black) with no human
-input:
+The active decision model (White) plays against the local heuristic
+(Black) with no human input:
 
 - Each side moves on a ~700ms cadence (`AUTO_DELAY`).
 - When the game ends, the result stays on screen for 4 seconds, then a
   new game starts automatically — the comparison runs continuously.
 - The score line and game-over message name the AIs instead of "you":
-  **Local AI** (Black) vs **Jev** (White), or **Local AI 1** vs
-  **Local AI 2** when no key is set. Labels are computed by one `labels()`
-  function (no parameters — White is Jev when a key exists, otherwise
-  Local AI) so the pair is always consistent.
+  **Local AI** (Black) vs **Ollama** or **Jev** (White), or
+  **Local AI 1** vs **Local AI 2** when no backend exists. Labels are
+  computed by one `labels()` function.
 - Pass and Undo are disabled; clicks are ignored.
 - Toggling autoplay **off** mid-game returns control immediately: you
   play Black from the current position, and the normal manual flow
   resumes.
-- Without an API key, both sides use the local heuristic (Local AI 1
+- Without a decision backend, both sides use the local heuristic (Local AI 1
   vs Local AI 2) — the game keeps playing.
 
 **What autoplay actually compares depends on hosting** — this is the
@@ -796,13 +799,12 @@ subtle part:
 
 | Hosting | Autoplay is |
 | --- | --- |
-| `localhost:3000` with a key | Jev vs local heuristic — the real comparison |
-| `localhost:3000` without a key | local AI vs local AI (White falls back) |
-| GitHub Pages or `file://` | Same — local AI vs local AI (no key, CORS blocks API) |
+| `localhost:3000` with Ollama or a TypeSafe key | decision model vs local heuristic |
+| `localhost:3000` without a backend | local AI vs local AI |
+| GitHub Pages or `file://` | local AI vs local AI |
 
-So the Jev-vs-heuristic comparison is only meaningful when the game is
-served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
-`J`).
+The comparison is meaningful only when `/jevstatus` identifies an
+Ollama or TypeSafe backend.
 
 ## HUD and logging
 
@@ -819,16 +821,16 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
   options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
   keyboard shortcut has a visible button equivalent.
 - **Player combinations panel** (under the score, bordered): the
-  matchups — you vs Jev (needs `node server.js` + API key), you vs local
-  AI (no key needed), local AI vs Jev (autoplay with key), or local AI
-  vs local AI (autoplay without key) — and the keys/buttons that switch
-  them.
+  matchups — you vs Ollama/TypeSafe decision AI, you vs local AI, local
+  AI vs decision AI, or local AI vs local AI — and the keys/buttons
+  that switch them.
 - **Status line** (top): whose turn it is, what Jev is doing, illegal
   move reasons, retry status, and the game result with both scores.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
-- **`WHITE: JEV` / `WHITE: LOCAL AI`** (bottom-right): whether Jev or
-  the heuristic is driving White. Green for Jev, red for local AI.
+- **`WHITE: OLLAMA ...` / `WHITE: JEV` / `WHITE: LOCAL AI`**
+  (bottom-right): which backend is driving White. Green for decision AI,
+  red for local AI.
 - **`AUTOPLAY (0 to toggle)`** (bottom-left, yellow): autoplay is on.
 - **Jev log panel** (`L`, bottom-left): the last 10 decisions in reverse
   order — timestamp, played point, confidence, and Jev's original pick
@@ -843,22 +845,25 @@ served by `server.js` with `TYPESAFE_API_KEY` set (or a key entered with
 ```
 index.html    — redirect to jev-go.html (GitHub Pages serves index.html at the root)
 jev-go.html   — entire game: rules, rendering, both AIs, UI (single file, no dependencies)
-server.js     — local Node.js server + Jev CORS proxy (run: node server.js)
+server.js     — local Node.js server + Ollama/TypeSafe decision proxy
 ```
 
-`server.js` serves the static game on port 3000 and proxies `POST /jev`
-to `https://api.typesafe.ai/v1/systemone`, forwarding the browser's
-`Authorization` header or injecting the server key when the browser sent
-none (a browser key always wins). The server key may come from either
+`server.js` serves the static game on port 3000 and answers `POST /jev`
+from an explicit Ollama model, TypeSafe, or an auto-detected Ollama
+model, in that order. Native Ollama requests are forwarded unchanged
+except for the model name. The compatibility adapter maps every Choice,
+Noul, and Score question into a constrained chat response and rejects
+partial replies. The TypeSafe key may come from either
 `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` in the environment or local
-`.env` file. Hidden files are blocked from static requests.
-`GET /jevstatus` reports whether a server-side key is present. The server
+`.env`; a browser key takes precedence on that path. Hidden files are
+blocked from static requests. `GET /jevstatus` reports the selected
+backend, decision mode, and Ollama version. The server
 binds to `127.0.0.1` by default so the LAN cannot reach the proxy and
 spend the server key; `HOST=0.0.0.0` opts into LAN exposure deliberately.
 `/jev` request bodies over 256 KB are refused with `413` instead of
-being buffered in memory. Request-body reads and upstream HTTPS calls have
-15-second timeouts; timed-out requests return `504` and the upstream is
-destroyed.
+being buffered in memory. TypeSafe upstream calls have a 15-second
+timeout and Ollama calls have a 30-second timeout; timed-out requests
+return `504` and the upstream is destroyed.
 
 ### Server lifecycle
 

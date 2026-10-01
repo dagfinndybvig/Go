@@ -36,16 +36,17 @@
   <button id="undoBtn">Undo</button>
   <button id="newBtn">New game</button>
   <button id="autoBtn">Autoplay: off (0)</button>
-  <button id="keyBtn">API key (J)</button>
+  <button id="keyBtn">TypeSafe key (J)</button>
   <button id="logBtn">Jev log (L)</button>
 </div>
 <div id="score"></div>
 <div id="modes">
-  <b>Player combinations</b> — you vs <b>Jev</b> (needs <code>node server.js</code> + API key) ·
+  <b>Player combinations</b> — you vs <b>decision AI</b> (local Ollama or TypeSafe Jev) ·
   you vs <b>local AI</b> (no key needed) ·
-  <b>local AI vs Jev</b> (autoplay with key) ·
-  <b>local AI vs local AI</b> (autoplay without key)<br>
-  Keys: <b>0</b> toggle autoplay · <b>J</b> enter API key (Jev needs it) · <b>L</b> Jev log ·
+  <b>local AI vs decision AI</b> (autoplay) ·
+  <b>local AI vs local AI</b> (without a backend)<br>
+  Run <code>node server.js</code> to auto-detect Ollama, or press <b>J</b> for a TypeSafe key ·
+  Keys: <b>0</b> toggle autoplay · <b>J</b> TypeSafe key · <b>L</b> decision log ·
   or use the buttons above ·
   <a href="https://en.wikipedia.org/wiki/Go_(game)" target="_blank" rel="noopener">Go on Wikipedia</a>
 </div>
@@ -162,11 +163,10 @@ function legalMoves(bd, color, koBoard) {
   return moves;
 }
 
-// ---- Jev AI (TypeSafe System One) ----
-// When a TypeSafe API key is available (browser key entered with J, or the
-// server's TYPESAFE_API_KEY injected by server.js), White's moves are chosen
-// by the Jev decision model. Jev always plays — no fallback to the local
-// heuristic. On error or timeout, the game retries and waits.
+// ---- Jev-compatible decision AI ----
+// The local server can answer from Ollama or proxy TypeSafe System One.
+// Without either backend, White falls back to the local heuristic. Once a
+// decision backend is enabled, errors retry and wait rather than changing AI.
 const Jev = (() => {
   // On localhost (served by server.js), use the proxy. Elsewhere
   // (Pages, file://) go direct to the API — the browser key provides
@@ -182,9 +182,18 @@ const Jev = (() => {
   let apiKey = '';
   try { apiKey = localStorage.getItem('typesafe_api_key') || ''; } catch (e) {}
   let serverKey = false;
+  let serverBackend = '';
+  let serverMode = '';
+  let serverVersion = '';
   if (PROXY) {
     fetch('/jevstatus').then(r => r.json())
-      .then(d => { serverKey = !!d.serverKey; refreshHud(); })
+      .then(d => {
+        serverKey = !!d.serverKey;
+        serverBackend = d.backend || '';
+        serverMode = d.mode || '';
+        serverVersion = d.version || '';
+        refreshHud();
+      })
       .catch(() => {});
   }
 
@@ -406,7 +415,8 @@ const Jev = (() => {
       questions,
     };
     const ctrl = new AbortController();
-    const timeout = setTimeout(() => ctrl.abort(), 10000);
+    const timeoutMs = serverBackend.startsWith('ollama:') ? 30000 : 10000;
+    const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
     let resp;
     try {
       resp = await fetch(ENDPOINT, {
@@ -482,6 +492,14 @@ const Jev = (() => {
     coordName,
     isEnabled() { return !!(apiKey || serverKey); },
     isProxied() { return PROXY; },
+    getBackend() { return serverBackend; },
+    getInfo() { return { mode: serverMode, version: serverVersion }; },
+    displayName() { return serverBackend.startsWith('ollama:') ? 'Ollama' : 'Jev'; },
+    errorHelp() {
+      return serverBackend.startsWith('ollama:')
+        ? ' Check Ollama and node server.js.'
+        : (PROXY ? ' Press J to check your TypeSafe API key.' : ' Run node server.js locally.');
+    },
     logEntry(entry) { addLog(entry); },
     getLog() { return log.slice(); },
     clearLog() { log.length = 0; },
@@ -530,8 +548,9 @@ const AUTO_DELAY = 700; // pause between autoplay moves
 // numbered: Local AI 1 (Black) vs Local AI 2 (White).
 function labels() {
   const jev = Jev.isEnabled();
-  if (!autoplay) return { black: 'You', white: jev ? 'Jev' : 'Local AI' };
-  if (jev) return { black: 'Local AI', white: 'Jev' };
+  const decisionAi = Jev.displayName();
+  if (!autoplay) return { black: 'You', white: jev ? decisionAi : 'Local AI' };
+  if (jev) return { black: 'Local AI', white: decisionAi };
   return { black: 'Local AI 1', white: 'Local AI 2' };
 }
 
@@ -612,7 +631,7 @@ function jevMove(retries) {
       }, 1000);
     } else {
       Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel + ' after ' + retries + ' retries', choice: sel, confidence: null, state: null, probabilities: null });
-      setStatus('Jev error — illegal move. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
+      setStatus('Decision error — illegal move.' + Jev.errorHelp());
     }
   }).catch(err => {
     if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
@@ -624,7 +643,7 @@ function jevMove(retries) {
         if (requestGeneration === gameGeneration) jevMove(retries + 1);
       }, 1000);
     } else {
-      setStatus('Jev error after ' + (retries + 1) + ' attempts: ' + reason + '. Press J to check your API key' + (Jev.isProxied() ? '.' : ', or run node server.js locally.'));
+      setStatus('Decision error after ' + (retries + 1) + ' attempts: ' + reason + '.' + Jev.errorHelp());
     }
   });
 }
@@ -813,7 +832,14 @@ function toggleAutoplay() {
 
 function setHud(enabled) {
   const el = document.getElementById('jevhud');
-  el.textContent = 'WHITE: ' + labels().white.toUpperCase();
+  const backend = Jev.getBackend();
+  const info = Jev.getInfo();
+  if (enabled && backend.startsWith('ollama:')) {
+    const detail = [info.version ? 'v' + info.version : '', info.mode || ''].filter(Boolean).join(', ');
+    el.textContent = 'WHITE: OLLAMA ' + backend.slice(7) + (detail ? ' (' + detail + ')' : '');
+  } else {
+    el.textContent = 'WHITE: ' + labels().white.toUpperCase();
+  }
   el.style.color = enabled ? '#4caf50' : '#e53935';
   updateScoreLine();
   updateMatchup();
@@ -838,7 +864,10 @@ function renderJevLog() {
 }
 
 function promptForKey() {
-  const key = prompt('Enter TypeSafe API key (leave empty to use the local AI for White instead of Jev). Note: Jev only works when served by node server.js on localhost — on GitHub Pages or file:// the API blocks cross-origin calls even with a key.', Jev.getKey() || '');
+  const ollamaNote = Jev.getBackend().startsWith('ollama:')
+    ? ' Ollama is currently selected by the server, so this key will be used only after restarting without OLLAMA_MODEL.'
+    : '';
+  const key = prompt('Enter TypeSafe API key (leave empty to use Ollama when available, otherwise local AI). TypeSafe Jev needs node server.js on localhost; hosted/file pages are blocked by CORS.' + ollamaNote, Jev.getKey() || '');
   if (key !== null) Jev.setKey(key.trim());
   refreshHud();
 }

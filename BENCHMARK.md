@@ -27,12 +27,16 @@ scoring, simple ko, and 5.5 komi for actual White.
 
 ## Run
 
-The runner reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` from the
-environment or local `.env` without printing it. It requires Node.js with
-global `fetch` and `AbortSignal.timeout` support (Node.js 18 or newer).
+By default the runner reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY`
+from the environment or local `.env` without printing it. Select
+Ollama's native decision endpoint with `--ollama-model MODEL` (or
+`OLLAMA_MODEL`); `--ollama-host URL` defaults to `OLLAMA_HOST` or
+`http://localhost:11434`. An Ollama model takes precedence over a
+TypeSafe key. The runner requires Node.js 18 or newer.
 
 ```sh
 node benchmark.js --pairs 10
+node benchmark.js --pairs 10 --ollama-model nimble:latest
 node benchmark.js --pairs 10 --opponents greedy,choice-only
 node benchmark.js --pairs 20 --opponents greedy,noise25,noise50,random
 node benchmark.js --pairs 10 --opponents katago-5k
@@ -47,6 +51,12 @@ color, result, score margin, captures, passes, API calls, token usage, and
 resolved model name. Games that reach `--max-turns` without ending are marked
 `incomplete` and excluded from W-D-L, Elo, mean-margin, and sign-test
 statistics; the summary reports their count separately.
+
+Ollama benchmarking requires native `/v1/systemone`; unlike `server.js`,
+the runner does not use the legacy chat adapter. Per-game records include
+`decisionBackend` (`typesafe` or `ollama:<model>`). The runner applies
+the same question batching and split-Choice probability merge as the
+server, preserving every legal move despite Ollama's per-request limits.
 
 ### Trace output
 

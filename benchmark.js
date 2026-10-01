@@ -15,6 +15,104 @@ const crypto = require('node:crypto');
 const ROOT = __dirname;
 const DEFAULT_MAX_TURNS = 600;
 const DEFAULT_OPPONENTS = ['greedy'];
+const OLLAMA_MAX_CHOICE_CANDIDATES = 26;
+const OLLAMA_QUESTIONS_PER_BATCH = 44;
+
+function prepareOllamaQuestions(questions) {
+  const expanded = {};
+  const splitChoices = [];
+  for (const [name, question] of Object.entries(questions)) {
+    const criteria = Array.isArray(question.criteria)
+      ? question.criteria.map(String)
+      : Object.keys(question.criteria || {});
+    if (question.type !== 'choice' || criteria.length <= OLLAMA_MAX_CHOICE_CANDIDATES) {
+      expanded[name] = question;
+      continue;
+    }
+    const parts = [];
+    for (let i = 0; i < criteria.length; i += OLLAMA_MAX_CHOICE_CANDIDATES) {
+      const partName = name + '__part_' + (parts.length + 1);
+      const names = criteria.slice(i, i + OLLAMA_MAX_CHOICE_CANDIDATES);
+      expanded[partName] = {
+        ...question,
+        criteria: Object.fromEntries(names.map(candidate => [
+          candidate,
+          Array.isArray(question.criteria) ? null : question.criteria[candidate],
+        ])),
+      };
+      parts.push(partName);
+    }
+    splitChoices.push({ name, parts });
+  }
+  return { expanded, splitChoices };
+}
+
+function collapseOllamaChoices(reply, splitChoices) {
+  for (const split of splitChoices) {
+    const probabilities = {};
+    let confidence = 0;
+    const partAnswers = split.parts.map(partName => {
+      const answer = reply.answers[partName];
+      if (!answer || !answer.probabilities) throw new Error('Ollama omitted split Choice ' + partName);
+      return { partName, answer };
+    });
+    const candidateCount = partAnswers.reduce(
+      (total, part) => total + Object.keys(part.answer.probabilities).length,
+      0
+    );
+    for (const { partName, answer } of partAnswers) {
+      confidence = Math.max(confidence, Number(answer.confidence || 0));
+      const partWeight = Object.keys(answer.probabilities).length / candidateCount;
+      for (const [candidate, probability] of Object.entries(answer.probabilities)) {
+        probabilities[candidate] = probability * partWeight;
+      }
+      delete reply.answers[partName];
+    }
+    const choice = Object.entries(probabilities)
+      .reduce((best, entry) => entry[1] > best[1] ? entry : best)[0];
+    reply.answers[split.name] = { type: 'choice', choice, confidence, probabilities };
+  }
+  return reply;
+}
+
+async function fetchOllamaDecision(endpoint, model, init) {
+  const request = JSON.parse(init.body);
+  request.model = model;
+  const prepared = prepareOllamaQuestions(request.questions || {});
+  const entries = Object.entries(prepared.expanded);
+  const batches = [];
+  for (let i = 0; i < entries.length; i += OLLAMA_QUESTIONS_PER_BATCH) {
+    const body = JSON.stringify({
+      ...request,
+      questions: Object.fromEntries(entries.slice(i, i + OLLAMA_QUESTIONS_PER_BATCH)),
+    });
+    batches.push(fetch(endpoint, {
+      ...init,
+      headers: { 'Content-Type': 'application/json' },
+      body,
+      signal: AbortSignal.timeout(30000),
+    }));
+  }
+  const responses = await Promise.all(batches);
+  const failure = responses.find(response => !response.ok);
+  if (failure) return failure;
+  const replies = await Promise.all(responses.map(response => response.json()));
+  const merged = {
+    model: replies.find(reply => reply.model)?.model || model,
+    answers: {},
+    usage: {},
+  };
+  for (const reply of replies) {
+    Object.assign(merged.answers, reply.answers || {});
+    for (const [name, value] of Object.entries(reply.usage || {})) {
+      if (Number.isFinite(value)) merged.usage[name] = (merged.usage[name] || 0) + value;
+    }
+  }
+  return new Response(JSON.stringify(collapseOllamaChoices(merged, prepared.splitChoices)), {
+    status: 200,
+    headers: { 'Content-Type': 'application/json' },
+  });
+}
 
 function parseArgs(argv) {
   const out = {
@@ -22,7 +120,10 @@ function parseArgs(argv) {
     output: null, katagoBin: process.env.KATAGO_BIN || 'katago',
     katagoModel: process.env.KATAGO_MODEL || '',
     katagoHumanModel: process.env.KATAGO_HUMAN_MODEL || '',
-    katagoConfig: process.env.KATAGO_CONFIG || '', help: false,
+    katagoConfig: process.env.KATAGO_CONFIG || '',
+    ollamaModel: process.env.OLLAMA_MODEL || '',
+    ollamaHost: process.env.OLLAMA_HOST || 'http://localhost:11434',
+    help: false,
   };
   for (let i = 0; i < argv.length; i++) {
     const arg = argv[i];
@@ -36,6 +137,8 @@ function parseArgs(argv) {
     else if (arg === '--katago-model') out.katagoModel = argv[++i];
     else if (arg === '--katago-human-model') out.katagoHumanModel = argv[++i];
     else if (arg === '--katago-config') out.katagoConfig = argv[++i];
+    else if (arg === '--ollama-model') out.ollamaModel = argv[++i];
+    else if (arg === '--ollama-host') out.ollamaHost = argv[++i];
     else throw new Error('Unknown argument: ' + arg);
   }
   if (!out.help && (!Number.isInteger(out.pairs) || out.pairs < 1)) throw new Error('--pairs must be a positive integer');
@@ -44,6 +147,10 @@ function parseArgs(argv) {
   const known = new Set(['choice-only', 'greedy', 'noise25', 'noise50', 'random', 'katago-5k']);
   if (!out.help && (!out.opponents.length || out.opponents.some(name => !known.has(name)))) {
     throw new Error('Opponents must be selected from: ' + [...known].join(', '));
+  }
+  if (!out.help && out.ollamaModel) {
+    const url = new URL(out.ollamaHost);
+    if (url.protocol !== 'http:' && url.protocol !== 'https:') throw new Error('--ollama-host must use http:// or https://');
   }
   return out;
 }
@@ -67,6 +174,9 @@ Options:
   --katago-model PATH       KataGo's normal model (default: Homebrew b18 model)
   --katago-human-model PATH Human-SL model (default: KATAGO_HUMAN_MODEL or ~/.local/share/katago/models)
   --katago-config PATH      GTP human config (default: Homebrew gtp_human5k_example.cfg)
+  --ollama-model MODEL      Use an Ollama decision model instead of TypeSafe
+                            (default: OLLAMA_MODEL; requires native /v1/systemone)
+  --ollama-host URL         Ollama base URL (default: OLLAMA_HOST or http://localhost:11434)
   --help                    Show this help
 
 The greedy anchor is rated 1000 by convention. All Elo numbers are local to
@@ -247,7 +357,7 @@ async function startKataGo(options) {
   }
 }
 
-function loadGame(apiKey) {
+function loadGame(apiKey, decisionBackend) {
   const html = fs.readFileSync(path.join(ROOT, 'jev-go.html'), 'utf8');
   const match = html.match(/<script>\s*([\s\S]*?)\s*<\/script>/i);
   if (!match) throw new Error('Could not find the inline game script in jev-go.html');
@@ -266,7 +376,13 @@ function loadGame(apiKey) {
   const math = Object.create(Math);
   let apiRequests = 0;
   const apiUsage = [];
-  const trackedFetch = (...args) => { apiRequests++; return fetch(...args); };
+  const trackedFetch = async (url, init = {}) => {
+    apiRequests++;
+    if (decisionBackend.kind === 'ollama' && url === 'https://api.typesafe.ai/v1/systemone') {
+      return fetchOllamaDecision(decisionBackend.endpoint, decisionBackend.model, init);
+    }
+    return fetch(url, init);
+  };
   const shim = `
 ;globalThis.__benchmark = {
   N, EMPTY, BLACK, WHITE, Jev,
@@ -312,6 +428,7 @@ function loadGame(apiKey) {
     recordApiUsage(data) { apiUsage.push({ model: data.model || 'jev-latest', usage: data.usage || {} }); },
     fetch(url, init) { return trackedFetch(url, init); },
     apiKey,
+    decisionBackend: decisionBackend.label,
   };
 }
 
@@ -786,6 +903,7 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
     inputTokens: tokens.input,
     outputTokens: tokens.output,
     models,
+    decisionBackend: runtime.decisionBackend,
     terminal: resignedBy != null ? 'opponent resigned' : finished ? 'two passes' : 'turn cap',
   };
 }
@@ -800,8 +918,19 @@ async function main() {
   const options = parseArgs(process.argv.slice(2));
   if (options.help) { printHelp(); return; }
   const apiKey = readApiKey();
-  if (!apiKey) throw new Error('Set TYPESAFE_API_KEY or add it to .env before running the Jev benchmark.');
-  const runtime = loadGame(apiKey);
+  if (!apiKey && !options.ollamaModel) {
+    throw new Error('Set TYPESAFE_API_KEY, add it to .env, or select --ollama-model before running the benchmark.');
+  }
+  const decisionBackend = options.ollamaModel
+    ? {
+        kind: 'ollama',
+        model: options.ollamaModel,
+        endpoint: new URL('/v1/systemone', options.ollamaHost).href,
+        label: 'ollama:' + options.ollamaModel,
+      }
+    : { kind: 'typesafe', label: 'typesafe' };
+  const runtime = loadGame(apiKey, decisionBackend);
+  console.log('Decision backend: ' + decisionBackend.label);
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const outputPath = path.resolve(ROOT, options.output || ('benchmark-results-' + stamp + '.jsonl'));
   const tracePath = outputPath.replace(/\.jsonl$/, '') + '.traces.jsonl';
