@@ -129,8 +129,9 @@ node server.js
 ```
 
 With no TypeSafe key, the first installed model with a sufficiently
-large context is auto-detected. Set `OLLAMA_MODEL=nimble:latest` to
-select one explicitly. See
+large context is auto-detected. For Nimble, create the 16K `nimble-go`
+variant described in [OLLAMA.md](OLLAMA.md), then set
+`OLLAMA_MODEL=nimble-go` to select it explicitly. See
 [OLLAMA.md](OLLAMA.md) for setup, native/chat modes, remote hosts, and
 benchmarking.
 

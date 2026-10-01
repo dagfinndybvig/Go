@@ -22,7 +22,7 @@ one `Noul`, and a `Score` for every legal point plus pass.
 ## Start
 
 With no TypeSafe key configured, `node server.js` auto-detects the first
-installed Ollama model whose configured context is at least 8192 tokens
+installed Ollama model whose configured context is at least 16384 tokens
 (falling back to the first model when none advertises that size):
 
 ```sh
@@ -44,6 +44,25 @@ OLLAMA_MODEL=nimble:latest node server.js
 
 Open **http://localhost:3000**. The HUD names the model, Ollama version,
 and decision mode.
+
+The stock `nimble:latest` model is configured for only 8194 tokens. That
+is enough for sparse positions but dense tactical positions can exceed
+it. Create a Go-specific 16K variant once to avoid position-dependent
+HTTP 400 responses:
+
+```text
+FROM nimble:latest
+PARAMETER num_ctx 16384
+```
+
+Save those lines as `Nimble.Go.Modelfile`, then run:
+
+```sh
+ollama create nimble-go -f Nimble.Go.Modelfile
+```
+
+Start the game with `OLLAMA_MODEL=nimble-go`. This changes only the
+loaded context; it uses the same Nimble weights.
 
 ## Backend selection
 
@@ -138,9 +157,11 @@ Each game record includes `decisionBackend`.
   `node server.js`; inspect `/jevstatus`.
 - **Mode is `chat`:** update Ollama to 0.35+ and use a decision-capable
   model.
-- **HTTP 400 mentioning tokens:** the model's configured context is too
-  small for Go's roughly 8K-token empty-board prompt. Use `nimble:latest`
-  or another model configured for at least 8192 tokens.
+- **HTTP 400 mentioning context or tokens:** the model's configured
+  context is too small for the current position. Dense tactical positions
+  need more than the stock Nimble model's 8194 tokens. Create the 16K
+  `nimble-go` variant above or use another model configured for at least
+  16384 tokens.
 - **HTTP 504:** the model exceeded the 30-second local deadline. Use a
   faster model or allow it to warm before playing.
 - **HTTP 502 in chat mode:** the model failed to return every required

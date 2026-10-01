@@ -106,7 +106,9 @@ There is no test framework. Tests are throwaway Node scripts using
   44-question batches and split/recombine large Choice distributions;
   never truncate the legal move list. Go's empty-board prompt is about
   8K tokens, so auto-detection prefers models configured with
-  `num_ctx >= 8192`. Browser/server Ollama timeouts are 30s; TypeSafe
+  `num_ctx >= 16384`. The stock `nimble:latest` context is only 8194 and
+  can return HTTP 400 on dense positions; use a 16K `nimble-go` variant.
+  Browser/server Ollama timeouts are 30s; TypeSafe
   keeps its 10s/15s limits.
 - When testing the live API through the proxy, start the server with
   `tools.process.start` (background), not a foreground bash call — a
