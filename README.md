@@ -147,8 +147,8 @@ See [method and fixtures](BENCHMARK.md#quick-matched-model-comparison).
 
 Dagfinn Dybvig started a naive attempt to let Jev play Go without any special training or programming. Lukas Mosser's rebuild — per-move
 Scores plus a Choice prior plus a Noul pass gate — underlies the recorded
-scoring experiments below. The current Ollama path instead uses a
-Choice/Noul tournament for latency. The
+scoring experiments below. (The current Ollama path instead uses a
+Choice/Noul tournament for latency.) The
 mechanical-facts generation of the final version made it stronger by supplying what Jev
 cannot compute (captures, liberties, ladders, snapback) and
 withholding what it should judge for itself. The paired,
