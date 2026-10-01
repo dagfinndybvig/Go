@@ -477,16 +477,19 @@ function summarize(records) {
   }
   const output = [];
   for (const [opponent, games] of groups) {
-    const wins = games.filter(g => g.result === 'win').length;
-    const losses = games.filter(g => g.result === 'loss').length;
-    const draws = games.length - wins - losses;
-    const score = wins + draws * 0.5, rate = score / games.length;
-    const jevBlack = games.filter(g => g.jevColor === 'black');
-    const jevWhite = games.filter(g => g.jevColor === 'white');
+    const ratedGames = games.filter(g => g.result !== 'incomplete');
+    const incomplete = games.length - ratedGames.length;
+    const wins = ratedGames.filter(g => g.result === 'win').length;
+    const losses = ratedGames.filter(g => g.result === 'loss').length;
+    const draws = ratedGames.length - wins - losses;
+    const score = wins + draws * 0.5;
+    const rate = ratedGames.length ? score / ratedGames.length : null;
+    const jevBlack = ratedGames.filter(g => g.jevColor === 'black');
+    const jevWhite = ratedGames.filter(g => g.jevColor === 'white');
     const blackWins = jevBlack.filter(g => g.result === 'win').length;
     const whiteWins = jevWhite.filter(g => g.result === 'win').length;
     const decisive = wins + losses;
-    const ci = draws === 0 ? wilsonInterval(wins, games.length) : wilsonInterval(score, games.length);
+    const ci = draws === 0 ? wilsonInterval(wins, ratedGames.length) : wilsonInterval(score, ratedGames.length);
     const eloBounds = [
       ci[0] === 0 ? -Infinity : eloDifference(ci[0]),
       ci[1] === 1 ? Infinity : eloDifference(ci[1]),
@@ -494,27 +497,33 @@ function summarize(records) {
     // Paired by seed: each pair is Jev-Black + Jev-White against the same
     // seed; the pair's combined margin cancels the color advantage.
     const pairs = new Map();
-    for (const g of games) {
+    for (const g of ratedGames) {
       if (!g.pair) continue;
-      if (!pairs.has(g.pair)) pairs.set(g.pair, 0);
-      pairs.set(g.pair, pairs.get(g.pair) + g.jevMargin);
+      if (!pairs.has(g.pair)) pairs.set(g.pair, []);
+      pairs.get(g.pair).push(g);
     }
     let pairWins = 0, pairLosses = 0;
-    for (const total of pairs.values()) {
+    let completePairs = 0;
+    for (const pairGames of pairs.values()) {
+      if (pairGames.length !== 2 || new Set(pairGames.map(g => g.jevColor)).size !== 2) continue;
+      completePairs++;
+      const total = pairGames.reduce((sum, g) => sum + g.jevMargin, 0);
       if (total > 0) pairWins++;
       else if (total < 0) pairLosses++;
     }
     output.push({
-      opponent, games: games.length, wins, draws, losses,
+      opponent, games: ratedGames.length, attemptedGames: games.length, incomplete, wins, draws, losses,
       scoreRate: rate,
       eloDifference: eloDifference(rate),
       approximateElo95: eloBounds,
       signTestP: signTestP(wins, losses),
       pairSignTestP: signTestP(pairWins, pairLosses),
-      pairs: pairs.size,
+      pairs: completePairs,
       jevBlack: { games: jevBlack.length, wins: blackWins },
       jevWhite: { games: jevWhite.length, wins: whiteWins },
-      meanScoreMargin: games.reduce((sum, g) => sum + g.jevMargin, 0) / games.length,
+      meanScoreMargin: ratedGames.length
+        ? ratedGames.reduce((sum, g) => sum + g.jevMargin, 0) / ratedGames.length
+        : null,
       totalApiCalls: games.reduce((sum, g) => sum + g.apiCalls, 0),
       inputTokens: games.reduce((sum, g) => sum + g.inputTokens, 0),
       outputTokens: games.reduce((sum, g) => sum + g.outputTokens, 0),
@@ -728,6 +737,8 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
     ? resignedBy !== jevColor
     : jevScore > opponentScore;
   const draw = resignedBy == null && jevScore === opponentScore;
+  const completed = resignedBy != null || finished;
+  const result = !completed ? 'incomplete' : draw ? 'draw' : jevWon ? 'win' : 'loss';
   traceEntries.push({
     type: 'terminal',
     game: gameId,
@@ -737,7 +748,7 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
     blackScore: finalScore.black,
     whiteScore: finalScore.white,
     jevMargin: jevScore - opponentScore,
-    result: draw ? 'draw' : jevWon ? 'win' : 'loss',
+    result,
     terminal: resignedBy != null ? 'opponent resigned' : finished ? 'two passes' : 'turn cap',
     resignedBy: resignedBy == null ? null : resignedBy === e.BLACK ? 'black' : 'white',
   });
@@ -759,7 +770,7 @@ async function playGame(runtime, opponent, jevColor, seed, maxTurns, kataGo, tra
     opponentDetails: opponent.kind === 'katago' ? kataGo.metadata : null,
     seed,
     jevColor: jevColor === e.BLACK ? 'black' : 'white',
-    result: draw ? 'draw' : jevWon ? 'win' : 'loss',
+    result,
     finished,
     turns,
     blackScore: finalScore.black,
@@ -827,16 +838,19 @@ async function main() {
   console.log('\nColor-balanced results (Elo difference is per named opponent):');
   for (const row of summarize(records)) {
     const ci = row.approximateElo95.map(formatElo).join(' to ');
+    const scoreText = row.scoreRate == null ? 'n/a' : (row.scoreRate * 100).toFixed(1) + '%';
+    const marginText = row.meanScoreMargin == null ? 'n/a' : row.meanScoreMargin.toFixed(1);
     console.log(
       row.opponent + ': ' + row.wins + '-' + row.draws + '-' + row.losses +
-      ' (Jev W-D-L), score ' + (row.scoreRate * 100).toFixed(1) + '%' +
+      ' (Jev W-D-L), score ' + scoreText +
       ', Elo Δ ' + (row.scoreRate === 1 ? '+∞ (all wins)' : row.scoreRate === 0 ? '−∞ (all losses)' : formatElo(row.eloDifference)) +
       ' [' + ci + ' 95% approx]' +
       ', black wins ' + row.jevBlack.wins + '/' + row.jevBlack.games +
       ', white wins ' + row.jevWhite.wins + '/' + row.jevWhite.games +
-      ', mean margin ' + row.meanScoreMargin.toFixed(1) +
+      ', mean margin ' + marginText +
       ', sign test p ' + (row.signTestP == null ? 'n/a' : row.signTestP.toFixed(3)) +
       ', seed-paired p ' + (row.pairSignTestP == null ? 'n/a' : row.pairSignTestP.toFixed(3)) +
+      (row.incomplete ? ', incomplete ' + row.incomplete + '/' + row.attemptedGames + ' (excluded)' : '') +
       ', calls ' + row.totalApiCalls + ', tokens ' + row.inputTokens + '/' + row.outputTokens +
       ', model ' + (row.models.join(', ') || 'unreported') +
       (row.opponentModel ? ', anchor ' + row.opponentModel : '')

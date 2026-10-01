@@ -61,8 +61,13 @@ const MARGIN = 30, CELL = (468 - 2 * MARGIN) / (N - 1);
 
 let board, turn, captures, history, lastMove, lastCoord, jevLastChoice, passes, gameOver;
 let gameGeneration = 0;
+let autoplayRestartTimer = null;
 
 function newGame() {
+  if (autoplayRestartTimer !== null) {
+    clearTimeout(autoplayRestartTimer);
+    autoplayRestartTimer = null;
+  }
   gameGeneration++;
   board = Array.from({ length: N }, () => new Array(N).fill(EMPTY));
   turn = BLACK;
@@ -468,7 +473,6 @@ const Jev = (() => {
     // The per-move Score is the value estimate. Choice supplies a small log
     // prior, and Noul prevents an unsupported early pass from winning.
     const picked = candidates.reduce((best, candidate) => candidate.utility > best.utility ? candidate : best).name;
-    jevLastChoice = picked === 'pass' ? null : picked;
     addLog({ t: Date.now(), ok: true, choice: picked, jevChoice: res.choice, confidence: res.confidence, probabilities: res.probabilities, passProbability: res.passProbability, passAllowed, scores: res.scores, usage: res.usage, model: res.model, state: res.state });
     return picked;
   }
@@ -531,13 +535,26 @@ function labels() {
   return { black: 'Local AI 1', white: 'Local AI 2' };
 }
 
+function saveHistory() {
+  history.push({
+    board,
+    captures: { ...captures },
+    lastMove,
+    lastCoord: lastCoord ? { ...lastCoord } : null,
+    jevLastChoice,
+    passes,
+    turn,
+  });
+}
+
 function applyMove(m, color) {
-  history.push({ board, captures: { ...captures }, lastMove, passes });
+  saveHistory();
   const prevBoard = board; // position before this move, for the next player's ko check
   board = m.board;
   captures[color] += m.captured;
   lastMove = prevBoard;
   lastCoord = { x: m.x, y: m.y };
+  if (color === WHITE) jevLastChoice = Jev.coordName(m.x, m.y);
   passes = 0;
   turn = color === BLACK ? WHITE : BLACK;
   draw();
@@ -613,11 +630,12 @@ function jevMove(retries) {
 }
 
 function doPass(color) {
-  if (gameOver) return;
-  history.push({ board, captures: { ...captures }, lastMove, passes });
+  if (gameOver || color !== turn) return;
+  saveHistory();
   passes++;
   lastMove = null;
   lastCoord = null;
+  if (color === WHITE) jevLastChoice = null;
   if (passes >= 2) { endGame(); return; }
   if (color === WHITE) {
     turn = BLACK;
@@ -679,19 +697,30 @@ function endGame() {
   const overlay = document.getElementById('gameover');
   overlay.textContent = msg;
   overlay.style.display = 'block';
-  if (autoplay) setTimeout(() => { newGame(); if (autoplay) setTimeout(blackAutoMove, AUTO_DELAY); }, 4000);
+  if (autoplay) {
+    autoplayRestartTimer = setTimeout(() => {
+      autoplayRestartTimer = null;
+      if (!autoplay) return;
+      newGame();
+      setTimeout(blackAutoMove, AUTO_DELAY);
+    }, 4000);
+  }
 }
 
 function undo() {
   if (!history.length || gameOver || autoplay) return;
   gameGeneration++;
-  const h = history.pop();
+  let h;
+  do {
+    h = history.pop();
+  } while (history.length && h.turn !== BLACK);
   board = h.board;
   captures = h.captures;
   lastMove = h.lastMove;
-  lastCoord = null;
+  lastCoord = h.lastCoord;
+  jevLastChoice = h.jevLastChoice;
   passes = h.passes;
-  turn = BLACK; // undo returns to the human's turn
+  turn = h.turn;
   gameOver = false;
   document.getElementById('gameover').style.display = 'none';
   setStatus('Your move — you are Black.');
@@ -755,7 +784,9 @@ document.getElementById('board').addEventListener('click', e => {
   const y = (N - 1) - Math.round((e.clientY - rect.top - MARGIN) / CELL);
   if (x >= 0 && x < N && y >= 0 && y < N) humanPlay(x, y);
 });
-document.getElementById('passBtn').addEventListener('click', () => { if (!autoplay) doPass(BLACK); });
+document.getElementById('passBtn').addEventListener('click', () => {
+  if (!autoplay && turn === BLACK) doPass(BLACK);
+});
 document.getElementById('undoBtn').addEventListener('click', undo);
 document.getElementById('newBtn').addEventListener('click', newGame);
 
@@ -772,6 +803,10 @@ function toggleAutoplay() {
     if (turn === BLACK) setTimeout(blackAutoMove, AUTO_DELAY);
     // if it is White's turn, a pending Jev decision resumes the loop
   } else {
+    if (autoplayRestartTimer !== null) {
+      clearTimeout(autoplayRestartTimer);
+      autoplayRestartTimer = null;
+    }
     setStatus(turn === BLACK ? 'Your move — you are Black.' : labels().white + ' (White) is thinking...');
   }
 }

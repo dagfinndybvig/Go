@@ -44,7 +44,9 @@ each Jev turn can require many API calls. Results print as the run proceeds
 and are written to a unique `benchmark-results-*.jsonl` file (ignored by Git). Use
 `--output PATH` to choose a different file. Each record includes the seed,
 color, result, score margin, captures, passes, API calls, token usage, and
-resolved model name.
+resolved model name. Games that reach `--max-turns` without ending are marked
+`incomplete` and excluded from W-D-L, Elo, mean-margin, and sign-test
+statistics; the summary reports their count separately.
 
 ### Trace output
 
@@ -62,8 +64,9 @@ line per ply of every game:
 - `type: "terminal"` entries (one per game) carry the final board, the
   per-point area ownership map (`0` neutral, `1` Black, `2` White; stones
   count as their color, an empty region as the sole color it touches), the
-  final scores, Jev's margin, the result, and how the game ended. Ownership
-  counts plus komi reproduce `blackScore`/`whiteScore` exactly.
+  final scores, Jev's margin, the result, and how the game ended. For a turn
+  cap, these are cutoff-position diagnostics and the result is `incomplete`.
+  Ownership counts plus komi reproduce `blackScore`/`whiteScore` exactly.
 
 The traces are the raw material for later value-function or prompt
 calibration (DSPy/ReAnchor): every position is self-contained enough to
@@ -142,6 +145,9 @@ Two exact two-sided sign tests accompany each opponent row:
   by the sign of its combined margin, which cancels the color advantage.
   This is the stricter color-balanced question and the one to read when
   comparing prompt variants.
+
+Only pairs in which both color-swapped games finish are included in the
+seed-paired test.
 
 A p-value above roughly 0.05 means the record is indistinguishable from a
 coin flip at this sample size — treat the Elo difference as unresolved
