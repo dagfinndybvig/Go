@@ -107,7 +107,7 @@ stronger than Nimble as configured here**. These are new current-player
 results, separate from both the historical TypeSafe benchmarks below
 and the matched three-position probe.
 
-**Why Nimble uses this mode:** requesting a separate Score for every
+**Why Nimble plays like this:** requesting a separate Score for every
 legal action made local inference too slow for comfortable interactive
 play. The Ollama path therefore omits those Scores and uses Choice plus
 a Noul pass judgment to reduce per-turn work and keep the browser
