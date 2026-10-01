@@ -6,6 +6,9 @@
 <style>
   body { background: #2b2b2b; color: #eee; font-family: Georgia, serif; display: flex; flex-direction: column; align-items: center; margin: 0; padding: 20px; }
   h1 { font-weight: normal; margin: 0 0 4px; }
+  #backendStatus { min-height: 22px; margin: 2px 0 4px; padding: 3px 10px; border: 1px solid #777; border-radius: 12px; color: #ffd54f; font: 13px monospace; }
+  #backendStatus.ready { border-color: #4caf50; color: #8ee892; }
+  #backendStatus.offline { border-color: #e53935; color: #ff8a80; }
   #status { min-height: 24px; margin: 8px 0; font-size: 18px; }
   #matchup { min-height: 24px; font-size: 19px; color: #ffd54f; }
   #modes { border: 1px solid #666; border-radius: 6px; padding: 8px 14px; margin-top: 10px; font-size: 13px; color: #ddd; background: rgba(0,0,0,.25); max-width: 560px; }
@@ -25,6 +28,7 @@
 </head>
 <body>
 <h1>Jev Go</h1>
+<div id="backendStatus">● Checking decision backend...</div>
 <div id="matchup"></div>
 <div id="status">Your move — you are Black.</div>
 <div id="boardwrap">
@@ -185,6 +189,7 @@ const Jev = (() => {
   let serverBackend = '';
   let serverMode = '';
   let serverVersion = '';
+  let serverStatusReady = !PROXY;
   if (PROXY) {
     fetch('/jevstatus').then(r => r.json())
       .then(d => {
@@ -192,9 +197,13 @@ const Jev = (() => {
         serverBackend = d.backend || '';
         serverMode = d.mode || '';
         serverVersion = d.version || '';
+        serverStatusReady = true;
         refreshHud();
       })
-      .catch(() => {});
+      .catch(() => {
+        serverStatusReady = true;
+        refreshHud();
+      });
   }
 
   function coordName(x, y) { return COLS[x] + (y + 1); }
@@ -436,8 +445,17 @@ const Jev = (() => {
     } finally {
       clearTimeout(timeout);
     }
-    if (!resp.ok) throw new Error('HTTP ' + resp.status);
-    const data = await resp.json();
+    const responseText = await resp.text();
+    let data;
+    try {
+      data = JSON.parse(responseText || '{}');
+    } catch (e) {
+      throw new Error(resp.ok ? 'invalid JSON response' : 'HTTP ' + resp.status);
+    }
+    if (!resp.ok) {
+      const detail = data.detail || data.error;
+      throw new Error('HTTP ' + resp.status + (detail ? ': ' + detail : ''));
+    }
     const answers = data.answers || {};
     const policy = answers.move;
     const passGate = answers.pass_ok;
@@ -506,7 +524,7 @@ const Jev = (() => {
     isEnabled() { return !!(apiKey || serverKey); },
     isProxied() { return PROXY; },
     getBackend() { return serverBackend; },
-    getInfo() { return { mode: serverMode, version: serverVersion }; },
+    getInfo() { return { mode: serverMode, version: serverVersion, ready: serverStatusReady }; },
     displayName() { return serverBackend.startsWith('ollama:') ? 'Ollama' : 'Jev'; },
     errorHelp() {
       return serverBackend.startsWith('ollama:')
@@ -630,12 +648,30 @@ function jevMove(retries) {
     return;
   }
   setHud(true);
-  setStatus(labels().white + ' (White) is thinking...');
+  const decisionName = labels().white;
+  const startedAt = Date.now();
+  const progress = setInterval(() => {
+    if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) {
+      clearInterval(progress);
+      return;
+    }
+    setStatus(decisionName + ' (White) is thinking... ' + ((Date.now() - startedAt) / 1000).toFixed(1) + 's');
+  }, 100);
+  setStatus(decisionName + ' (White) is thinking... 0.0s');
   Jev.chooseMove(moves).then(sel => {
+    clearInterval(progress);
     if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
-    if (sel === 'pass') { doPass(WHITE); return; }
+    const elapsed = ((Date.now() - startedAt) / 1000).toFixed(1);
+    if (sel === 'pass') {
+      doPass(WHITE);
+      if (!autoplay) setStatus(decisionName + ' passed in ' + elapsed + 's — your move.');
+      return;
+    }
     const m = moves.find(mv => Jev.coordName(mv.x, mv.y) === sel);
-    if (m) applyMove(m, WHITE);
+    if (m) {
+      applyMove(m, WHITE);
+      if (!autoplay) setStatus(decisionName + ' played ' + sel + ' in ' + elapsed + 's — your move.');
+    }
     else if (retries < 3) {
       Jev.logEntry({ t: Date.now(), ok: false, reason: 'Jev chose illegal point ' + sel, choice: sel, confidence: null, state: null, probabilities: null });
       setStatus('Jev returned an illegal move — retrying...');
@@ -647,6 +683,7 @@ function jevMove(retries) {
       setStatus('Decision error — illegal move.' + Jev.errorHelp());
     }
   }).catch(err => {
+    clearInterval(progress);
     if (gameOver || requestGeneration !== gameGeneration || turn !== WHITE) return;
     const reason = err && err.message ? err.message : String(err);
     Jev.logEntry({ t: Date.now(), ok: false, reason, choice: null, confidence: null, state: null, probabilities: null });
@@ -845,13 +882,26 @@ function toggleAutoplay() {
 
 function setHud(enabled) {
   const el = document.getElementById('jevhud');
+  const statusEl = document.getElementById('backendStatus');
   const backend = Jev.getBackend();
   const info = Jev.getInfo();
   if (enabled && backend.startsWith('ollama:')) {
     const detail = [info.version ? 'v' + info.version : '', info.mode || ''].filter(Boolean).join(', ');
     el.textContent = 'WHITE: OLLAMA ' + backend.slice(7) + (detail ? ' (' + detail + ')' : '');
+    statusEl.textContent = '● Ollama connected — ' + backend.slice(7) + (detail ? ' · ' + detail : '');
+    statusEl.className = 'ready';
+  } else if (enabled) {
+    el.textContent = 'WHITE: JEV';
+    statusEl.textContent = '● TypeSafe Jev connected';
+    statusEl.className = 'ready';
+  } else if (!info.ready) {
+    el.textContent = 'WHITE: CHECKING...';
+    statusEl.textContent = '● Checking decision backend...';
+    statusEl.className = '';
   } else {
     el.textContent = 'WHITE: ' + labels().white.toUpperCase();
+    statusEl.textContent = '○ No decision backend — White uses Local AI';
+    statusEl.className = 'offline';
   }
   el.style.color = enabled ? '#4caf50' : '#e53935';
   updateScoreLine();

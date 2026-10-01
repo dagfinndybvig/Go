@@ -815,6 +815,10 @@ Ollama or TypeSafe backend.
 
 ## HUD and logging
 
+- **Backend indicator** (under the title): prominently reports
+  connecting, connected Ollama model/version/mode, connected TypeSafe,
+  or the local fallback. Green means ready, amber means checking, and
+  red means no decision backend.
 - **Matchup line** (under the title, yellow, large): exactly who is
   playing who, with stone glyphs — `● You (Black) vs ○ Ollama (White)`,
   `● You (Black) vs ○ Jev (White)`, `● You (Black) vs ○ Local AI
@@ -830,8 +834,10 @@ Ollama or TypeSafe backend.
   matchups — you vs Ollama/TypeSafe decision AI, you vs local AI, local
   AI vs decision AI, or local AI vs local AI — and the keys/buttons
   that switch them.
-- **Status line** (top): whose turn it is, what the decision backend is
-  doing, illegal move reasons, retry status, and the game result.
+- **Status line** (top): whose turn it is, a live elapsed timer while
+  the decision backend is thinking, the completed move and elapsed
+  time, detailed HTTP errors, illegal move reasons, retry status, and
+  the game result.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
 - **`WHITE: OLLAMA ...` / `WHITE: JEV` / `WHITE: LOCAL AI`**

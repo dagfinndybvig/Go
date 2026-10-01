@@ -43,8 +43,10 @@ set "OLLAMA_MODEL=nimble-go" && node server.js
 OLLAMA_MODEL=nimble-go node server.js
 ```
 
-Open **http://localhost:3000**. The HUD names the model, Ollama version,
-and decision mode.
+Open **http://localhost:3000**. A green indicator under the title names
+the connected model, Ollama version, and decision mode. After Black
+moves, the status line shows a live thinking timer and then White's
+coordinate and elapsed time.
 
 The stock `nimble:latest` model is configured for only 8194 tokens. That
 is enough for sparse positions but dense tactical positions can exceed
