@@ -3,7 +3,7 @@
 # Jev Go
 
 A small 9x9 Go game that supports **both local models through
-[Ollama](https://ollama.com) and [TypeSafe Jev](https://www.typesafe.ai)**.
+[Ollama](https://ollama.com) and online API [TypeSafe Jev](https://www.typesafe.ai)**.
 You play Black; the selected decision model plays White. Without either
 backend, White uses a built-in local heuristic. Autoplay lets the local
 heuristic play Black against White.
