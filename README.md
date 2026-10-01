@@ -10,6 +10,12 @@ to a built-in local heuristic AI. You play Black. In autoplay mode, the
 local heuristic drives Black against the decision model's White (or
 against itself when no backend is available).
 
+**Recommended setup:** install [Ollama](https://ollama.com), run
+`ollama pull nimble:latest`, then start `node server.js`. No API key is
+needed, requests stay local, and the server automatically uses Ollama's
+native Jev-compatible decision endpoint. See [OLLAMA.md](OLLAMA.md).
+TypeSafe Jev remains available as the cloud alternative.
+
 Jev is a general-purpose decision model, not a dedicated Go engine. The
 current experiment asks it to score each legal move and combines those
 scores with a move-choice prior and a separate pass judgment. It still
@@ -105,7 +111,7 @@ game end.
 | New game | New game button |
 | Set TypeSafe Jev API key | `J` |
 | Toggle Jev log panel | `L` |
-| Toggle autoplay (Jev vs local AI) | `0` |
+| Toggle autoplay (decision model vs local AI) | `0` |
 
 All of these are also visible as buttons above the board: **Autoplay:
 off/on (0)**, **TypeSafe key (J)**, and **Jev log (L)**.
@@ -159,9 +165,9 @@ The HUD shows who is playing at all times:
 - A yellow **matchup line** under the title with stone glyphs, e.g.
   `● You (Black)  vs  ○ Ollama (White)` or
   `● You (Black)  vs  ○ Jev (White)`,
-  `● You (Black)  vs  ○ Local AI (White)` (no key),
-  `● Local AI (Black)  vs  ○ Jev (White)` (autoplay with key), or
-  `● Local AI 1 (Black)  vs  ○ Local AI 2 (White)` (autoplay without key),
+  `● You (Black)  vs  ○ Local AI (White)` (no backend),
+  `● Local AI (Black)  vs  ○ Ollama/Jev (White)` (autoplay), or
+  `● Local AI 1 (Black)  vs  ○ Local AI 2 (White)` (autoplay without a backend),
   naming the actual driver of each colour.
 - A bordered **player combinations** panel listing the possible
   matchups and how to switch between them.
@@ -514,12 +520,14 @@ autoplay runs.
 ```
 jev-go.html   — entire game (single file, no dependencies)
 server.js     — local Node.js server + Ollama/TypeSafe decision proxy
+benchmark.js  — paired Ollama/TypeSafe rating runner
+OLLAMA.md     — recommended local-model setup and protocol guide
 index.html    — redirect to jev-go.html, so GitHub Pages serves the game
 ```
 
 The game logic (groups, liberties, captures, ko, scoring) is pure
-functions over a 9x9 array; the Jev integration mirrors the pattern used
-in [Fight](https://github.com/dagfinndybvig/Fight).
+functions over a 9x9 array; the Ollama-first Jev-compatible integration
+mirrors the pattern used in [Fight](https://github.com/dagfinndybvig/Fight).
 
 ## Credits
 

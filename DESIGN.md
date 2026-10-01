@@ -1,8 +1,10 @@
 # Design
 
 Detailed design notes for *Jev Go*, a 9x9 Go game whose White stones are
-played by [Jev](https://www.typesafe.ai), TypeSafe AI's "System One"
-decision model.
+played by a local [Ollama](https://ollama.com) decision model or
+[Jev](https://www.typesafe.ai), TypeSafe AI's cloud "System One" model.
+Ollama is the recommended local runtime because it needs no API key and
+keeps positions on the configured host.
 
 ## Overview
 
@@ -26,10 +28,11 @@ fallback on low confidence or errors — requests retry instead. The only
 fallback is when no decision backend exists: the local heuristic plays
 White.
 
-### Why Jev is weak at Go
+### Why general decision models are weak at Go
 
-Jev is a general-purpose decision model, not a dedicated Go engine. It
-receives a text description of the board and returns one move per turn
+Jev-compatible Ollama models and TypeSafe Jev are general-purpose
+decision models, not dedicated Go engines. They receive a text
+description of the board and return one move per turn
 — no search tree, no Monte Carlo playouts, no learned board evaluation.
 Dedicated Go AI (AlphaGo and its successors) needed deep neural
 networks trained on millions of self-play games plus tree search to
@@ -716,9 +719,9 @@ sound.
 
 The output names are `move` for Choice, `pass_ok` for Noul, and
 `quality_<coordinate>` for each Score (for example, `quality_E5` and
-`quality_pass`). TypeSafe returns the expected ordinal score for each
-Score field. This experiment uses that raw value; it has not calibrated
-the rubric or trained the model with DSPy/ReAnchor.
+`quality_pass`). Native Ollama and TypeSafe return the expected ordinal
+score for each Score field. This experiment uses that raw value; it has
+not calibrated the rubric or trained the model with DSPy/ReAnchor.
 
 #### Move selection
 
@@ -753,7 +756,7 @@ CORS headers, and browsers do not call Ollama directly:
 | How you open the game | Decision AI? | Why |
 | --- | --- | --- |
 | `file://` (double-click `jev-go.html`) | No | There is no local `/jev` server. White uses the heuristic. |
-| `http://localhost:3000` (`node server.js`) | Yes, with Ollama or a TypeSafe key | Explicit `OLLAMA_MODEL` wins; otherwise a TypeSafe key wins; without a key, the first installed Ollama model is auto-detected. |
+| `http://localhost:3000` (`node server.js`) | Yes, with Ollama or a TypeSafe key | Explicit `OLLAMA_MODEL` wins; otherwise a TypeSafe key wins; without a key, the first context-compatible installed Ollama model is auto-detected. |
 | Hosted (GitHub Pages) | No | There is no proxy, and direct TypeSafe calls are blocked by CORS. Run `node server.js` locally. |
 
 The HUD in the bottom-right corner reflects this at all times:
@@ -809,23 +812,22 @@ Ollama or TypeSafe backend.
 ## HUD and logging
 
 - **Matchup line** (under the title, yellow, large): exactly who is
-  playing who, with stone glyphs — `● You (Black) vs ○ Jev (White)`,
-  `● You (Black) vs ○ Local AI (White)` (no key), `● Local AI (Black)
-  vs ○ Jev (White)` (autoplay with key), or
-  `● Local AI 1 (Black) vs ○ Local AI 2 (White)` (autoplay without key).
+  playing who, with stone glyphs — `● You (Black) vs ○ Ollama (White)`,
+  `● You (Black) vs ○ Jev (White)`, `● You (Black) vs ○ Local AI
+  (White)` (no backend), or the corresponding autoplay matchup.
 - **Game-over overlay** (across the board): when the game ends, the
   result — winner and score — appears in large red letters on a dark
   panel over the board. It is cleared by New game, Undo, or the
   autoplay restart.
 - **Controls row**: Pass, Undo, New game, plus buttons for the mode
-  options — `Autoplay: off/on (0)`, `API key (J)`, `Jev log (L)`. Every
-  keyboard shortcut has a visible button equivalent.
+  options — `Autoplay: off/on (0)`, `TypeSafe key (J)`, `Jev log (L)`.
+  Every keyboard shortcut has a visible button equivalent.
 - **Player combinations panel** (under the score, bordered): the
   matchups — you vs Ollama/TypeSafe decision AI, you vs local AI, local
   AI vs decision AI, or local AI vs local AI — and the keys/buttons
   that switch them.
-- **Status line** (top): whose turn it is, what Jev is doing, illegal
-  move reasons, retry status, and the game result with both scores.
+- **Status line** (top): whose turn it is, what the decision backend is
+  doing, illegal move reasons, retry status, and the game result.
 - **Score line**: captures for both sides with stone glyphs, labeled
   "● You (Black)" or "● Local AI (Black)" depending on mode.
 - **`WHITE: OLLAMA ...` / `WHITE: JEV` / `WHITE: LOCAL AI`**
@@ -846,6 +848,8 @@ Ollama or TypeSafe backend.
 index.html    — redirect to jev-go.html (GitHub Pages serves index.html at the root)
 jev-go.html   — entire game: rules, rendering, both AIs, UI (single file, no dependencies)
 server.js     — local Node.js server + Ollama/TypeSafe decision proxy
+benchmark.js  — paired Ollama/TypeSafe rating runner and trace writer
+OLLAMA.md     — recommended local backend setup and protocol details
 ```
 
 `server.js` serves the static game on port 3000 and answers `POST /jev`

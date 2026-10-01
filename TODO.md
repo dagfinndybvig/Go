@@ -1,5 +1,21 @@
 # TODO
 
+## Local Ollama decision backend
+
+- [x] Make Ollama the recommended no-key runtime, with explicit-model
+      selection and context-compatible auto-detection.
+- [x] Forward native Choice, Noul, and Score outputs through
+      `/v1/systemone`; retain a generalized constrained-chat adapter for
+      older Ollama versions.
+- [x] Preserve all 82 actions and 84 outputs across Ollama's native
+      limits by batching questions and splitting/recombining Choice
+      probabilities without truncating legal moves.
+- [x] Add Ollama model/version/mode HUD telemetry and direct Ollama
+      support to the color-balanced benchmark.
+- [x] Verify native `nimble:latest`, legacy chat adaptation, backend
+      precedence, auto-detection, full empty-board output shape, and a
+      paired benchmark smoke run. See OLLAMA.md.
+
 ## Current experiment: Jev multi-output move scoring
 
 - [x] Keep the complete legal point list plus `pass` in a Choice output.

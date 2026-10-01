@@ -4,6 +4,11 @@ Go is played on a 19x19 board (9x9 here). Two players take turns placing
 stones on the intersections: Black first, then White. Once placed, a
 stone never moves — it can only be captured.
 
+In Jev Go you play Black. White can be driven locally by an
+[Ollama](https://ollama.com) decision model (the recommended no-key
+setup), by TypeSafe Jev, or by the built-in heuristic. Backend choice
+does not change any rule below.
+
 - **Liberties** — the empty points adjacent to a stone. A group of
   connected same-color stones shares its liberties.
 - **Capture** — when a group's last liberty is filled by the opponent,

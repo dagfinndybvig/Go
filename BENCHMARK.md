@@ -1,10 +1,17 @@
-# 9x9 Jev rating benchmark
+# 9x9 decision-model rating benchmark
 
 `benchmark.js` runs paired games from the normal empty-board start using the
-same rules and Jev move policy as `jev-go.html`. Each pair reuses a seed for
-two games and swaps which side Jev plays. The seed controls local-opponent
-randomness; API outputs and the resolved Jev model are recorded because the
-remote service may change independently.
+same rules and Jev-compatible move policy as `jev-go.html`. It can call a
+local Ollama model directly or use TypeSafe Jev. Each pair reuses a seed
+for two games and swaps which side the decision model plays. The seed
+controls local-opponent randomness; outputs, backend, and resolved model
+are recorded.
+
+**Recommended local run (no API key):**
+
+```sh
+node benchmark.js --pairs 10 --ollama-model nimble:latest
+```
 
 ## Opponent anchors
 
@@ -27,16 +34,16 @@ scoring, simple ko, and 5.5 komi for actual White.
 
 ## Run
 
-By default the runner reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY`
-from the environment or local `.env` without printing it. Select
-Ollama's native decision endpoint with `--ollama-model MODEL` (or
-`OLLAMA_MODEL`); `--ollama-host URL` defaults to `OLLAMA_HOST` or
-`http://localhost:11434`. An Ollama model takes precedence over a
-TypeSafe key. The runner requires Node.js 18 or newer.
+Select Ollama's native decision endpoint with `--ollama-model MODEL`
+(or `OLLAMA_MODEL`); `--ollama-host URL` defaults to `OLLAMA_HOST` or
+`http://localhost:11434`. For TypeSafe instead, omit the Ollama model;
+the runner reads `TYPESAFE_API_KEY` or `TYPESAFEAI_API_KEY` from the
+environment or local `.env` without printing it. Ollama takes precedence
+when both are configured. The runner requires Node.js 18 or newer.
 
 ```sh
-node benchmark.js --pairs 10
 node benchmark.js --pairs 10 --ollama-model nimble:latest
+node benchmark.js --pairs 10                         # TypeSafe key required
 node benchmark.js --pairs 10 --opponents greedy,choice-only
 node benchmark.js --pairs 20 --opponents greedy,noise25,noise50,random
 node benchmark.js --pairs 10 --opponents katago-5k

@@ -5,8 +5,8 @@ Notes for coding agents working in this repo. Read this before editing.
 ## What this is
 
 A 9x9 Go game (`jev-go.html`, single file, no dependencies) whose White
-stones are played by TypeSafe Jev or a compatible local Ollama decision
-model, with a local greedy heuristic when neither backend exists. A
+stones are played by a local Ollama decision model (recommended) or
+TypeSafe Jev, with a local greedy heuristic when neither backend exists. A
 local greedy heuristic drives Black in autoplay mode. `server.js` is a
 zero-dependency Ollama/TypeSafe proxy. `benchmark.js` runs paired,
 color-balanced rating matches against fixed opponent anchors. See
@@ -116,15 +116,15 @@ There is no test framework. Tests are throwaway Node scripts using
 
 - `index.html` is a redirect to `jev-go.html`. Without it, Pages renders
   README.md instead of the game. Do not delete it.
-- Jev never runs on Pages (the API sends no CORS headers, so the
-  browser blocks direct calls even with a browser key) — White does not
-  move there. Don't "fix" this by pointing the browser at the API
-  directly; CORS blocks it. The endpoint logic uses the proxy
+- Decision AI never runs on Pages: there is no Ollama proxy, and the
+  TypeSafe API sends no CORS headers, so the browser blocks direct calls
+  even with a browser key. Don't "fix" this by pointing the browser at
+  either local Ollama or TypeSafe directly. The endpoint logic uses the proxy
   (`/jev`) only on `localhost`/`127.0.0.1`; everywhere else it goes
   direct to `https://api.typesafe.ai`, which the browser blocks. The
-  on-screen text reflects this: the modes panel says Jev needs
-  `node server.js` + API key, and error/status messages on non-localhost
-  say to run the server locally.
+  on-screen text reflects this: the modes panel recommends local Ollama
+  through `node server.js`, and errors on non-localhost say to run the
+  server locally.
 - The user pushes from the web UI and other sessions concurrently.
   Expect push rejections; `git fetch` + `git rebase origin/main`, then
   push. Never force-push without asking.

@@ -1,8 +1,9 @@
-# Local decision AI with Ollama
+# Ollama — recommended local decision AI
 
-Jev Go can use a local [Ollama](https://ollama.com) decision model for
-White instead of the TypeSafe Jev API. No API key is required, and model
-requests stay on the configured Ollama host.
+Ollama is the recommended way to run Jev Go's decision AI. It needs no
+API key, keeps board positions on the configured host, and exposes the
+same typed Choice/Noul/Score contract as TypeSafe Jev. TypeSafe remains
+available as the cloud alternative.
 
 ## Prerequisites
 
