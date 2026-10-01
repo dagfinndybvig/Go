@@ -11,9 +11,10 @@ local heuristic drives Black against the decision model's White (or
 against itself when no backend is available).
 
 **Recommended setup:** install [Ollama](https://ollama.com), run
-`ollama pull nimble:latest`, then start `node server.js`. No API key is
-needed, requests stay local, and the server automatically uses Ollama's
-native Jev-compatible decision endpoint. See [OLLAMA.md](OLLAMA.md).
+`ollama pull nimble:latest`, create the 16K `nimble-go` variant in
+[OLLAMA.md](OLLAMA.md), then start the server with that model. No API
+key is needed, requests stay local, and the server uses Ollama's native
+decision endpoint.
 TypeSafe Jev remains available as the cloud alternative.
 
 Jev is a general-purpose decision model, not a dedicated Go engine. The
@@ -248,10 +249,9 @@ into the new game.
 
 ## How it works
 
-On every White turn, the game sends one Jev-compatible JSON request
+On every White turn, the game sends one typed JSON request
 through the local server. It goes to TypeSafe System One (`jev-latest`)
-or Ollama `/v1/systemone`; the browser consumes the same response shape
-from either backend. The `state` string
+or Ollama `/v1/systemone`. The `state` string
 contains the compact board (`O` black, `X` white, `.` empty), captures,
 pass count, last moves, komi, and a coordinate legend. Columns are
 `A B C D E F G H J` (Go omits I); rows are numbered 1–9 from bottom to
@@ -269,15 +269,20 @@ colors) and capture threats — which White stones Black could capture on
 their reply. The legal move set is complete (up to 81
 points) plus `pass`.
 
-The request's `questions` object asks for three kinds of typed output:
+The request always asks for two typed outputs:
 
 - `move` is a `Choice` over every legal coordinate and `pass`. Option
   names are coordinates, and their descriptions are `null`.
 - `pass_ok` is a `Noul` judgment on whether passing is strategically
   sound.
-- Each `quality_<coordinate>` field is a `Score` for that candidate,
-  including `quality_pass`. Its shared rubric is 0–4: major blunder,
-  poor, playable, good, excellent.
+
+For TypeSafe, the request additionally asks for one
+`quality_<coordinate>` `Score` per candidate, including `quality_pass`,
+using the 0–4 rubric major blunder, poor, playable, good, excellent.
+Interactive Ollama play omits those 82 repeated Score questions and
+plays the highest-probability legal Choice allowed by the Noul pass
+gate. This reduced a measured opening turn from 524K aggregate input
+tokens and 14.5 seconds to 16K tokens and 1.5 seconds.
 
 Here is the JSON shape (the state text and move list are abbreviated; the
 live request expands them to the current position and every legal move):
@@ -319,18 +324,18 @@ live request expands them to the current position and every legal move):
 }
 ```
 
-An empty 9×9 board produces at most 84 outputs: one `Choice`, one
-`Noul`, and 82 `Score` fields (81 points plus pass). The model provides a
-numeric score for each candidate and a probability for each `Choice`
-option. The game selects the candidate maximizing
+For TypeSafe, an empty 9×9 board produces at most 84 outputs: one
+`Choice`, one `Noul`, and 82 `Score` fields (81 points plus pass). The
+game selects the candidate maximizing
 
 ```text
 score + 0.05 × ln(max(choice_probability, 1e-9))
 ```
 
-The `Score` is the main value estimate; the log-probability term gives
+The TypeSafe `Score` is the main value estimate; the log-probability term gives
 the `Choice` a small prior. `pass` enters that comparison only when the
 `Noul` probability for “passing is strategically sound” is at least 0.5.
+Ollama instead takes the Choice argmax after applying the same pass gate.
 The selected move is deterministic. The browser retries backend errors
 or timeouts up to three times; without Ollama or a TypeSafe key, White
 uses the local heuristic.

@@ -651,19 +651,20 @@ beginner strength.
 
 ### Jev-compatible decision AI
 
-White's moves are chosen by TypeSafe Jev or an Ollama model through the
-same typed contract. Native Ollama mode returns the Choice, Noul, and
-Score outputs directly; older Ollama versions use the server's
-JSON-schema chat adapter. Without either backend, White falls back to
-the local heuristic.
+White's moves are chosen by TypeSafe Jev or an Ollama model. Interactive
+Ollama play requests a complete Choice and Noul pass gate; TypeSafe also
+requests exhaustive candidate Scores. Older Ollama versions use the
+server's JSON-schema chat adapter. Without either backend, White falls
+back to the local heuristic.
 
 - **Browser endpoint**: `POST /jev` when served locally
 - **Upstream**: TypeSafe `/v1/systemone`, Ollama `/v1/systemone`, or
   Ollama `/api/chat` through the compatibility adapter
 - **Model**: `jev-latest` on TypeSafe; `OLLAMA_MODEL` (or the
   auto-detected first context-compatible installed model) on Ollama
-- **Outputs**: one `Choice`, one `Noul`, and a `Score` for each legal
-  point plus pass (up to 84 outputs on a 9x9 board)
+- **Outputs**: Ollama interactive play uses one `Choice` and one `Noul`;
+  TypeSafe adds a `Score` for each legal point plus pass (up to 84
+  outputs on a 9x9 board)
 - **Fetch timeout**: 10s for TypeSafe, 30s for Ollama, via
   `AbortController`
 - **Retry**: on error or timeout, `jevMove` retries up to 3 times (1s
@@ -703,33 +704,36 @@ on their reply).
 
 #### Candidate move set
 
-Jev receives every legal point. A 9x9 board has at most 81 legal moves;
-the Choice also includes `pass`, for at most 82 actions. Each action has
-its own Score output, plus the Choice and Noul outputs, for at most 84
-named outputs. This keeps distant opening and territory moves available
-instead of shortlisting moves by proximity to existing stones.
+The decision model receives every legal point. A 9x9 board has at most
+81 legal moves; the Choice also includes `pass`, for at most 82 actions.
+TypeSafe gives each action its own Score output, plus the Choice and
+Noul outputs, for at most 84 named outputs. Ollama omits the repeated
+Scores for responsive interactive play but keeps the complete Choice.
+This keeps distant opening and territory moves available instead of
+shortlisting moves by proximity to existing stones.
 
 #### Choice criteria
 
 Choice criteria are keyed by their coordinate (`E5`) and have null
-descriptions; `pass` is also null-described. Each action's separate Score
-field uses the same five-level rubric: major blunder, poor, playable,
-good, excellent. The Noul output asks whether passing is strategically
-sound.
+descriptions; `pass` is also null-described. The Noul output asks
+whether passing is strategically sound. On TypeSafe, each action's
+separate Score field uses the same five-level rubric: major blunder,
+poor, playable, good, excellent.
 
 The output names are `move` for Choice, `pass_ok` for Noul, and
 `quality_<coordinate>` for each Score (for example, `quality_E5` and
-`quality_pass`). Native Ollama and TypeSafe return the expected ordinal
-score for each Score field. This experiment uses that raw value; it has
-not calibrated the rubric or trained the model with DSPy/ReAnchor.
+`quality_pass`). When a full scoring request is used, native Ollama and
+TypeSafe return the expected ordinal score for each Score field. This
+experiment uses that raw value; it has not calibrated the rubric or
+trained the model with DSPy/ReAnchor.
 
 #### Move selection
 
-For each point, the game combines its expected Score with a small log
-prior from the Choice probability. It considers `pass` only when the
-Noul probability is at least 0.5, then selects the highest-utility
-candidate. There is no temperature or sampling. If a required typed
-answer is missing, the request fails and follows the existing retry path.
+TypeSafe combines each point's expected Score with a small log prior
+from the Choice probability. Ollama takes the Choice argmax. Both
+consider `pass` only when the Noul probability is at least 0.5. There is
+no temperature or sampling. If a required typed answer is missing, the
+request fails and follows the existing retry path.
 This is a one-ply decision: the model scores resulting move effects, but
 the game does not search opponent replies or build an MCTS tree.
 

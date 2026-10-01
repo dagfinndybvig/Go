@@ -99,12 +99,14 @@ There is no test framework. Tests are throwaway Node scripts using
   then the first context-compatible Ollama model auto-detected from
   `/api/tags` plus `/api/show`. Native
   Ollama `/v1/systemone` is preferred; older versions use a generalized
-  chat adapter that must return every Choice, Noul, and Score field.
+  chat adapter that must return every requested typed field.
   `OLLAMA_HOST` supports HTTP and HTTPS.
-- Ollama native limits are lower than Go's contract: at most 64
-  questions and 26 candidates per Choice. The server and benchmark use
-  44-question batches and split/recombine large Choice distributions;
-  never truncate the legal move list. Go's empty-board prompt is about
+- Ollama native limits are at most 64 questions and 26 candidates per
+  Choice. Interactive Ollama play requests the complete Choice plus
+  Noul, omitting exhaustive Scores for latency. The server and benchmark
+  split/recombine large Choice distributions; never truncate the legal
+  move list. Full benchmark requests use 44-question batches. Go's
+  empty-board prompt is about
   8K tokens, so auto-detection prefers models configured with
   `num_ctx >= 16384`. The stock `nimble:latest` context is only 8194 and
   can return HTTP 400 on dense positions; use a 16K `nimble-go` variant.
@@ -157,9 +159,10 @@ There is no test framework. Tests are throwaway Node scripts using
 - Jev's Choice criteria use each legal point's coordinate as the option
   name and `null` as its description; `pass` is also a null-described
   option. The compact state carries the board, game metadata, and an
-  explicit coordinate legend. Candidate scoring adds exact capture and
-  resulting-liberty annotations to the state, plus one Score per legal
-  point/pass and a Noul pass gate.
+  explicit coordinate legend. Candidate facts add exact capture and
+  resulting-liberty annotations to the state. Ollama interactive play
+  uses Choice plus a Noul pass gate; TypeSafe also requests one Score per
+  legal point/pass.
 - Mechanical facts are rules-engine output only — no evaluative
   language. Per candidate point: a warning when the played group is
   left with 1 liberty ("Black captures/recaptures the group (N stones)

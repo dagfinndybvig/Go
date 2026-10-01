@@ -401,13 +401,16 @@ const Jev = (() => {
     const scoreCriteria = ['Major blunder', 'Poor', 'Playable', 'Good', 'Excellent'];
     const allCandidates = moves.map(m => ({ name: coordName(m.x, m.y), move: m }));
     allCandidates.push({ name: 'pass', move: null });
-    for (const candidate of allCandidates) {
-      const field = 'quality_' + candidate.name;
-      questions[field] = {
-        type: 'score',
-        instructions: 'Rate White’s move ' + candidate.name + ' using the shared move-quality scale.',
-        criteria: scoreCriteria,
-      };
+    const exhaustiveScores = !serverBackend.startsWith('ollama:');
+    if (exhaustiveScores) {
+      for (const candidate of allCandidates) {
+        const field = 'quality_' + candidate.name;
+        questions[field] = {
+          type: 'score',
+          instructions: 'Rate White’s move ' + candidate.name + ' using the shared move-quality scale.',
+          criteria: scoreCriteria,
+        };
+      }
     }
     const body = {
       model: MODEL,
@@ -441,13 +444,15 @@ const Jev = (() => {
     if (!policy || !policy.choice) throw new Error('no Choice answer in response');
     if (!passGate || !Number.isFinite(passGate.noul)) throw new Error('no Noul answer for pass gate');
     const scores = {};
-    for (const candidate of allCandidates) {
-      const field = 'quality_' + candidate.name;
-      const answer = answers[field];
-      if (!answer || answer.type !== 'score' || !Number.isFinite(answer.score)) {
-        throw new Error('no Score answer for ' + candidate.name);
+    if (exhaustiveScores) {
+      for (const candidate of allCandidates) {
+        const field = 'quality_' + candidate.name;
+        const answer = answers[field];
+        if (!answer || answer.type !== 'score' || !Number.isFinite(answer.score)) {
+          throw new Error('no Score answer for ' + candidate.name);
+        }
+        scores[candidate.name] = answer.score;
       }
-      scores[candidate.name] = answer.score;
     }
     return {
       choice: policy.choice,
@@ -462,20 +467,28 @@ const Jev = (() => {
   }
 
   async function chooseMove(moves) {
-    // Keep every legal point available and ask Jev to score each resulting
-    // move as a separate output. With at most 81 legal points plus pass,
-    // the request has at most 84 outputs: Choice, Noul, and 82 Scores.
+    // Ollama uses the complete Choice plus Noul directly so interactive play
+    // stays responsive. TypeSafe also supplies a Score for every candidate.
     const res = await query(moves);
     const policyProbability = name => {
       if (res.probabilities && Number.isFinite(res.probabilities[name])) return res.probabilities[name];
       return res.choice === name ? 1 : 0;
     };
+    const passAllowed = res.passProbability >= 0.5;
+    if (!Object.keys(res.scores).length) {
+      const legalNames = moves.map(m => coordName(m.x, m.y));
+      if (passAllowed) legalNames.push('pass');
+      const picked = legalNames.includes(res.choice)
+        ? res.choice
+        : legalNames.reduce((best, name) => policyProbability(name) > policyProbability(best) ? name : best);
+      addLog({ t: Date.now(), ok: true, choice: picked, jevChoice: res.choice, confidence: res.confidence, probabilities: res.probabilities, passProbability: res.passProbability, passAllowed, scores: null, usage: res.usage, model: res.model, state: res.state });
+      return picked;
+    }
     const candidates = moves.map(m => {
       const name = coordName(m.x, m.y);
       const probability = policyProbability(name);
       return { name, score: res.scores[name], probability, utility: res.scores[name] + 0.05 * Math.log(Math.max(probability, 1e-9)) };
     });
-    const passAllowed = res.passProbability >= 0.5;
     if (passAllowed) {
       const probability = policyProbability('pass');
       candidates.push({ name: 'pass', score: res.scores.pass, probability, utility: res.scores.pass + 0.05 * Math.log(Math.max(probability, 1e-9)) });

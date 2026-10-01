@@ -152,6 +152,7 @@ function serveStatic(req, res) {
       "Content-Type": MIME[ext] || "application/octet-stream",
       "Content-Length": data.length,
       "X-Content-Type-Options": "nosniff",
+      ...(ext === ".html" ? { "Cache-Control": "no-store" } : {}),
     });
     res.end(req.method === "HEAD" ? undefined : data);
   });

@@ -1,9 +1,10 @@
 # Ollama — recommended local decision AI
 
 Ollama is the recommended way to run Jev Go's decision AI. It needs no
-API key, keeps board positions on the configured host, and exposes the
-same typed Choice/Noul/Score contract as TypeSafe Jev. TypeSafe remains
-available as the cloud alternative.
+API key and keeps board positions on the configured host. Interactive
+play uses a complete typed Choice plus a Noul pass gate; TypeSafe adds
+an exhaustive Score for every legal action. TypeSafe remains available
+as the cloud alternative.
 
 ## Prerequisites
 
@@ -16,8 +17,8 @@ ollama pull nimble:latest
 ```
 
 Ollama 0.35 or newer is recommended. Its native `/v1/systemone`
-endpoint supports the same typed request used by this game: one `Choice`,
-one `Noul`, and a `Score` for every legal point plus pass.
+endpoint supplies the Choice probabilities and Noul probability used by
+interactive play.
 
 ## Start
 
@@ -33,13 +34,13 @@ Select a model explicitly with `OLLAMA_MODEL`:
 
 ```sh
 # Windows PowerShell
-$env:OLLAMA_MODEL="nimble:latest"; node server.js
+$env:OLLAMA_MODEL="nimble-go"; node server.js
 
 # Windows cmd.exe
-set "OLLAMA_MODEL=nimble:latest" && node server.js
+set "OLLAMA_MODEL=nimble-go" && node server.js
 
 # macOS / Linux
-OLLAMA_MODEL=nimble:latest node server.js
+OLLAMA_MODEL=nimble-go node server.js
 ```
 
 Open **http://localhost:3000**. The HUD names the model, Ollama version,
@@ -91,21 +92,27 @@ The game server still binds to `127.0.0.1` unless `HOST=0.0.0.0` is set.
 
 ### Native mode
 
-On Ollama 0.35+, the server replaces the request's `model` field and
-forwards the otherwise unchanged body to Ollama's `/v1/systemone`:
+On Ollama 0.35+, interactive play sends one Choice over every legal
+action plus one Noul pass gate to Ollama's `/v1/systemone`:
 
 ```text
 browser POST /jev -> server -> Ollama /v1/systemone
-                  <- Choice + Noul + Scores <-
+                  <- Choice + Noul <-
 ```
 
-This preserves Ollama's real Choice probabilities, confidence, Noul
-probability, and expected Scores. Ollama limits one request to 64
-questions and one Choice to 26 candidates, while Go needs up to 84
-outputs and 82 actions. The proxy therefore uses two context-safe
-question batches, splits the Choice into 26-option parts, and recombines
-their normalized probabilities. No legal move or Score is dropped. The
-server also sends a small multi-output warm-up request at startup.
+This preserves Ollama's real Choice probabilities, confidence, and Noul
+probability. Ollama limits one Choice to 26 candidates, while Go needs
+up to 82 actions. The proxy splits the Choice into 26-option parts and
+recombines their normalized probabilities; no legal move is dropped.
+Avoiding 82 separate Score questions cuts a first-turn request from
+about 524K aggregate input tokens to about 16K and reduced the measured
+local response from 14.5 seconds to 1.5 seconds. The server also sends a
+small multi-output warm-up request at startup.
+
+The proxy still accepts the full Choice/Noul/Score contract, and the
+benchmark runner can use it for controlled experiments. The lightweight
+interactive path is specific to browser play through Ollama. TypeSafe
+interactive play retains exhaustive candidate Scores.
 
 ### Chat-adapter mode
 
@@ -116,8 +123,7 @@ response format. Choice probabilities are synthetic in this mode; Noul
 and Score values come from the chat model. Missing or invalid fields
 produce an explicit `502` rather than a partial success.
 
-Go can request up to 84 outputs, so native decision mode is strongly
-preferred for speed and fidelity.
+Native decision mode is strongly preferred for speed and fidelity.
 
 ## Verify
 
@@ -133,9 +139,11 @@ Example:
 {"serverKey":true,"backend":"ollama:nimble:latest","mode":"native","version":"0.35.0"}
 ```
 
-The server accepts the same full request shape documented in
+The server accepts the full request shape documented in
 [README.md](README.md#how-it-works). Press **L** in game to inspect
-choices, confidence, probabilities, pass judgments, and Scores.
+choices, confidence, probabilities, and pass judgments. Ollama
+interactive entries have `scores: null`; TypeSafe entries include
+per-candidate Scores.
 
 ## Benchmarking
 
