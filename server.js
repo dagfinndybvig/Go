@@ -1,7 +1,7 @@
 "use strict";
 // Local server for Jev Go.
-// Serves static files and answers POST /jev from either TypeSafe System One
-// or a local Ollama decision model.
+// Serves static files and answers POST /jev from TypeSafe System One,
+// a local Ollama decision model, or a Mistral chat model (chat adapter).
 const http = require("http");
 const https = require("https");
 const fs = require("fs");
@@ -18,6 +18,11 @@ const TS_PATH = "/v1/systemone";
 const OLLAMA_HOST = process.env.OLLAMA_HOST || "http://localhost:11434";
 const OLLAMA_URL = new URL(OLLAMA_HOST);
 const EXPLICIT_OLLAMA_MODEL = process.env.OLLAMA_MODEL || "";
+const MISTRAL_MODEL = process.env.MISTRAL_MODEL || ""; // opt-in chat backend, e.g. mistral-large-4
+const MISTRAL_API_KEY = process.env.MISTRAL_API_KEY || "";
+const MISTRAL_HOST = "api.mistral.ai";
+const MISTRAL_PATH = "/v1/chat/completions";
+const MISTRAL_TIMEOUT = 120000;
 const MIN_OLLAMA_CONTEXT = 16384;
 let ollamaModel = EXPLICIT_OLLAMA_MODEL;
 let ollamaVersion = "";
@@ -243,11 +248,9 @@ function peakedProbabilities(names, choice) {
   return probabilities;
 }
 
-function buildChatRequest(jevRequest) {
-  const questions = jevRequest.questions;
-  if (!questions || typeof questions !== "object" || Array.isArray(questions)) {
-    throw new Error("questions must be an object");
-  }
+// Shared typed-field description of a decision request: JSON-schema
+// properties, required field names, and one prompt line per question.
+function decisionSchema(questions) {
   const properties = {};
   const required = [];
   const prompt = [];
@@ -270,6 +273,15 @@ function buildChatRequest(jevRequest) {
       throw new Error("unsupported question type " + question.type);
     }
   }
+  return { properties, required, prompt };
+}
+
+function buildChatRequest(jevRequest) {
+  const questions = jevRequest.questions;
+  if (!questions || typeof questions !== "object" || Array.isArray(questions)) {
+    throw new Error("questions must be an object");
+  }
+  const { properties, required, prompt } = decisionSchema(questions);
   return {
     model: ollamaModel,
     stream: false,
@@ -292,13 +304,9 @@ function buildChatRequest(jevRequest) {
   };
 }
 
-function adaptChatReply(jevRequest, reply) {
-  let values;
-  try {
-    values = JSON.parse(reply.message && reply.message.content || "{}");
-  } catch (error) {
-    throw new Error("chat model returned invalid JSON");
-  }
+// Shared conversion of a parsed chat-model JSON payload into decision
+// answers: peaked probabilities for Choice, clamps for Noul and Score.
+function typedAnswers(jevRequest, values) {
   const answers = {};
   for (const [name, question] of Object.entries(jevRequest.questions)) {
     const value = values[name];
@@ -319,14 +327,144 @@ function adaptChatReply(jevRequest, reply) {
       answers[name] = { type: "score", score: Math.max(0, Math.min(maximum, value)) };
     }
   }
+  return answers;
+}
+
+function adaptChatReply(jevRequest, reply) {
+  let values;
+  try {
+    values = JSON.parse(reply.message && reply.message.content || "{}");
+  } catch (error) {
+    throw new Error("chat model returned invalid JSON");
+  }
   return {
     model: ollamaModel,
-    answers,
+    answers: typedAnswers(jevRequest, values),
     usage: {
       input_tokens: Number(reply.prompt_eval_count || 0),
       output_tokens: Number(reply.eval_count || 0),
     },
   };
+}
+
+function buildMistralRequest(jevRequest) {
+  const questions = jevRequest.questions;
+  if (!questions || typeof questions !== "object" || Array.isArray(questions)) {
+    throw new Error("questions must be an object");
+  }
+  const { properties, required, prompt } = decisionSchema(questions);
+  return {
+    model: MISTRAL_MODEL,
+    temperature: 0.2,
+    messages: [
+      {
+        role: "system",
+        content:
+          "You are a typed decision model. Evaluate every requested field independently and return exactly one JSON object matching the schema. " +
+          "Do not omit fields or add commentary.\n" + prompt.join("\n"),
+      },
+      { role: "user", content: String(jevRequest.state || "") },
+    ],
+    response_format: {
+      type: "json_schema",
+      json_schema: {
+        name: "decision",
+        strict: true,
+        schema: {
+          type: "object",
+          properties,
+          required,
+          additionalProperties: false,
+        },
+      },
+    },
+  };
+}
+
+function adaptMistralReply(jevRequest, reply) {
+  const message = reply && reply.choices && reply.choices[0] && reply.choices[0].message;
+  let values;
+  try {
+    values = JSON.parse((message && message.content) || "{}");
+  } catch (error) {
+    throw new Error("Mistral returned invalid JSON");
+  }
+  const usage = reply.usage || {};
+  return {
+    model: MISTRAL_MODEL,
+    answers: typedAnswers(jevRequest, values),
+    usage: {
+      input_tokens: Number(usage.prompt_tokens || 0),
+      output_tokens: Number(usage.completion_tokens || 0),
+    },
+  };
+}
+
+// Mistral chat backend (opt-in via MISTRAL_MODEL): adapt the decision
+// request to a chat completion with structured outputs, then reshape the
+// reply. Mistral's status code is forwarded so the browser's retry logic
+// treats 4xx as fatal.
+function handleMistral(req, res) {
+  readBody(req, res, rawBody => {
+    let jevRequest;
+    try {
+      jevRequest = JSON.parse(rawBody.toString("utf8"));
+      validateDecisionRequest(jevRequest);
+    } catch (error) {
+      sendJson(res, 400, { error: "bad_request", detail: error.message });
+      return;
+    }
+    let chatRequest;
+    try {
+      chatRequest = buildMistralRequest(jevRequest);
+    } catch (error) {
+      sendJson(res, 400, { error: "bad_request", detail: String(error.message) });
+      return;
+    }
+    const body = JSON.stringify(chatRequest);
+    const upstream = https.request(
+      {
+        hostname: MISTRAL_HOST,
+        path: MISTRAL_PATH,
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Content-Length": Buffer.byteLength(body),
+          Authorization: "Bearer " + MISTRAL_API_KEY,
+        },
+      },
+      up => {
+        const chunks = [];
+        up.on("data", chunk => chunks.push(chunk));
+        up.on("end", () => {
+          const text = Buffer.concat(chunks).toString("utf8");
+          let data;
+          try {
+            data = JSON.parse(text || "{}");
+          } catch (error) {
+            sendJson(res, 502, { error: "mistral_error", detail: "invalid JSON from Mistral" });
+            return;
+          }
+          if (up.statusCode !== 200) {
+            const detail = data && (data.message || (data.error && data.error.message)) ||
+              "HTTP " + up.statusCode;
+            sendJson(res, up.statusCode || 502, { error: "mistral_error", detail });
+            return;
+          }
+          try {
+            sendJson(res, 200, adaptMistralReply(jevRequest, data));
+          } catch (error) {
+            sendJson(res, 502, { error: "mistral_error", detail: String(error.message) });
+          }
+        });
+      }
+    );
+    bindUpstream(res, upstream, MISTRAL_TIMEOUT);
+    upstream.on("error", error => {
+      sendUpstreamError(res, "mistral_error", String(error.message));
+    });
+    upstream.end(body);
+  });
 }
 
 function chatAdapted(jevRequest, res) {
@@ -453,7 +591,7 @@ function handleOllama(req, res) {
 }
 
 async function detectOllama() {
-  if (ollamaModel || ENV_KEY) return;
+  if (MISTRAL_MODEL || ollamaModel || ENV_KEY) return;
   let models = [];
   try {
     const response = await ollamaJson("GET", "/api/tags", null);
@@ -524,14 +662,15 @@ const server = http.createServer((req, res) => {
       sendJson(res, 403, { error: "forbidden_origin", detail: "POST /jev requires the same origin" });
       return;
     }
+    if (MISTRAL_MODEL) return handleMistral(req, res);
     if (ollamaModel) return handleOllama(req, res);
     return proxyTypeSafe(req, res);
   }
   if (req.method === "GET" && req.url === "/jevstatus") {
     sendJson(res, 200, {
-      serverKey: !!ENV_KEY || !!ollamaModel,
-      backend: ollamaModel ? "ollama:" + ollamaModel : "typesafe",
-      mode: ollamaModel ? (nativeDecisions === null ? "probing" : nativeDecisions ? "native" : "chat") : "typesafe",
+      serverKey: !!ENV_KEY || !!ollamaModel || !!MISTRAL_MODEL,
+      backend: MISTRAL_MODEL ? "mistral:" + MISTRAL_MODEL : ollamaModel ? "ollama:" + ollamaModel : "typesafe",
+      mode: MISTRAL_MODEL ? "chat" : ollamaModel ? (nativeDecisions === null ? "probing" : nativeDecisions ? "native" : "chat") : "typesafe",
       version: ollamaVersion,
     });
     return;
@@ -544,12 +683,18 @@ server.requestTimeout = PROXY_TIMEOUT;
 server.headersTimeout = 5000;
 
 async function start() {
+  if (MISTRAL_MODEL && !MISTRAL_API_KEY) {
+    throw new Error("MISTRAL_MODEL is set but MISTRAL_API_KEY is missing");
+  }
   await detectOllama();
   if (ollamaModel) await fetchOllamaVersion();
   server.listen(PORT, HOST, () => {
     console.log("Jev Go");
     console.log("Open http://localhost:" + PORT);
-    if (ollamaModel) {
+    if (MISTRAL_MODEL) {
+      console.log("AI backend: Mistral model " + MISTRAL_MODEL + " via https://" + MISTRAL_HOST + MISTRAL_PATH + " (chat adapter)");
+      if (ollamaModel) console.log("(OLLAMA_MODEL " + ollamaModel + " is ignored while MISTRAL_MODEL is set)");
+    } else if (ollamaModel) {
       const source = EXPLICIT_OLLAMA_MODEL ? "configured" : "auto-detected";
       console.log("AI backend: Ollama model " + ollamaModel + " (" + source + ") at " + OLLAMA_HOST);
       if (ollamaVersion) console.log("Ollama version: " + ollamaVersion);

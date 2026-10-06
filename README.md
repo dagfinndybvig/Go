@@ -252,6 +252,21 @@ game folder's `.env` file (check `GET /jevstatus`); you can also press
 takes precedence on the TypeSafe path and is stored in `localStorage`.
 An explicit `OLLAMA_MODEL` takes precedence over TypeSafe.
 
+**With Mistral (chat adapter):** set `MISTRAL_MODEL` (for example
+`mistral-large-4`, the Le Chonk preview) plus `MISTRAL_API_KEY` in the
+environment and run the same server. The server forwards decision
+requests to `api.mistral.ai/v1/chat/completions` with structured
+outputs, so White is played by a general chat model. This is a
+chat-adapter policy: it is metered (cloud), needs no local model, and
+its results are not comparable with native Ollama decision
+benchmarks. `MISTRAL_MODEL` takes precedence over Ollama and TypeSafe
+while set. Expect roughly 10–30 seconds and about one cent per move.
+
+```
+# Windows (cmd.exe)
+set "MISTRAL_MODEL=mistral-large-4" && set "MISTRAL_API_KEY=yourkey" && node server.js
+```
+
 **Environment variable:**
 
 ```

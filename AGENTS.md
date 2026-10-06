@@ -105,7 +105,11 @@ There is no test framework. Tests are throwaway Node scripts using
   restart; `server.js` changes do.
 - Backend precedence is explicit `OLLAMA_MODEL`, then a TypeSafe key,
   then the first context-compatible Ollama model auto-detected from
-  `/api/tags` plus `/api/show`. The documented minimum is Ollama 0.35.0,
+  `/api/tags` plus `/api/show`. An opt-in Mistral chat backend
+  (`MISTRAL_MODEL` plus `MISTRAL_API_KEY`, chat-adapter policy via
+  `api.mistral.ai/v1/chat/completions` with structured outputs) takes
+  precedence over both while set; its results are never benchmarked
+  against native decision policies. The documented minimum is Ollama 0.35.0,
   using native `/v1/systemone`. The retained generalized chat adapter
   must return every requested typed field; it does not lower that minimum.
   `OLLAMA_HOST` supports HTTP and HTTPS.

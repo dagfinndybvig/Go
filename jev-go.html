@@ -45,11 +45,12 @@
 </div>
 <div id="score"></div>
 <div id="modes">
-  <b>Player combinations</b> — you vs <b>decision AI</b> (local Ollama or TypeSafe Jev) ·
+  <b>Player combinations</b> — you vs <b>decision AI</b> (local Ollama, Mistral, or TypeSafe Jev) ·
   you vs <b>local AI</b> (no key needed) ·
   <b>local AI vs decision AI</b> (autoplay) ·
   <b>local AI vs local AI</b> (without a backend)<br>
   Run <code>node server.js</code> to auto-detect Ollama, or press <b>J</b> for a TypeSafe key ·
+  set <code>MISTRAL_MODEL</code> (with <code>MISTRAL_API_KEY</code>) to play a Mistral chat model like Le Chonk (<code>mistral-large-4</code>) ·
   Keys: <b>0</b> toggle autoplay · <b>J</b> TypeSafe key · <b>L</b> decision log ·
   or use the buttons above ·
   <a href="https://en.wikipedia.org/wiki/Go_(game)" target="_blank" rel="noopener">Go on Wikipedia</a>
@@ -189,7 +190,7 @@ function legalMoves(bd, color, koBoard) {
 }
 
 // ---- Jev-compatible decision AI ----
-// The local server can answer from Ollama or proxy TypeSafe System One.
+// The local server can answer from Ollama, Mistral, or proxy TypeSafe System One.
 // Without either backend, White falls back to the local heuristic. Once a
 // decision backend is enabled, errors retry and wait rather than changing AI.
 const Jev = (() => {
@@ -482,7 +483,7 @@ const Jev = (() => {
     };
     const ctrl = new AbortController();
     activeController = ctrl;
-    const timeoutMs = serverBackend.startsWith('ollama:') ? 30000 : 10000;
+    const timeoutMs = serverBackend.startsWith('ollama:') ? 30000 : serverBackend.startsWith('mistral:') ? 120000 : 10000;
     const timeout = setTimeout(() => ctrl.abort(), timeoutMs);
     let data;
     try {
@@ -620,11 +621,11 @@ const Jev = (() => {
     isProxied() { return PROXY; },
     getBackend() { return serverBackend; },
     getInfo() { return { mode: serverMode, version: serverVersion, ready: serverStatusReady, status: decisionStatus, error: discoveryError || decisionError }; },
-    displayName() { return serverBackend.startsWith('ollama:') ? 'Ollama' : 'Jev'; },
+    displayName() { return serverBackend.startsWith('ollama:') ? 'Ollama' : serverBackend.startsWith('mistral:') ? 'Mistral' : 'Jev'; },
     errorHelp() {
-      return serverBackend.startsWith('ollama:')
-        ? ' Check Ollama and node server.js.'
-        : (PROXY ? ' Press J to check your TypeSafe API key.' : ' Run node server.js locally.');
+      if (serverBackend.startsWith('ollama:')) return ' Check Ollama and node server.js.';
+      if (serverBackend.startsWith('mistral:')) return ' Check MISTRAL_API_KEY, MISTRAL_MODEL, and node server.js.';
+      return PROXY ? ' Press J to check your TypeSafe API key.' : ' Run node server.js locally.';
     },
     logEntry(entry) { addLog(entry); },
     getLog() { return log.slice(); },
@@ -970,6 +971,8 @@ function setHud(enabled) {
   if (enabled && backend.startsWith('ollama:')) {
     const detail = [info.version ? 'v' + info.version : '', info.mode || ''].filter(Boolean).join(', ');
     el.textContent = 'WHITE: OLLAMA ' + backend.slice(7) + (detail ? ' (' + detail + ')' : '');
+  } else if (enabled && backend.startsWith('mistral:')) {
+    el.textContent = 'WHITE: MISTRAL ' + backend.slice(8) + (info.mode ? ' (' + info.mode + ')' : '');
   } else if (enabled) {
     el.textContent = 'WHITE: JEV';
   } else {
@@ -982,7 +985,7 @@ function setHud(enabled) {
     statusEl.textContent = '● Checking decision backend...';
     statusEl.className = '';
   } else if (enabled) {
-    const name = backend.startsWith('ollama:') ? 'Ollama ' + backend.slice(7) : 'TypeSafe Jev';
+    const name = backend.startsWith('ollama:') ? 'Ollama ' + backend.slice(7) : backend.startsWith('mistral:') ? 'Mistral ' + backend.slice(8) : 'TypeSafe Jev';
     const status = info.status === 'succeeded' ? 'last decision succeeded'
       : info.status === 'thinking' ? 'request in progress'
       : 'configured (not yet verified)';
