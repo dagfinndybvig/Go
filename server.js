@@ -381,14 +381,33 @@ function buildMistralRequest(jevRequest) {
   };
 }
 
-function adaptMistralReply(jevRequest, reply) {
-  const message = reply && reply.choices && reply.choices[0] && reply.choices[0].message;
-  let values;
+// Le Chonk (mistral-large-4) is a hybrid reasoning model: message.content
+// is an array of parts — a "thinking" part followed by a "text" part whose
+// text is the JSON answer. Older/other chat models return the JSON as a
+// string, and structured outputs may deliver a parsed object; all three
+// shapes are handled here. (Ported from the Chess repo, where this was
+// found against the live API.)
+function mistralContentJson(content) {
+  if (Array.isArray(content)) {
+    const text = content.filter(part => part && part.type === "text" && typeof part.text === "string")
+      .map(part => part.text).join("");
+    try {
+      return JSON.parse(text || "{}");
+    } catch (error) {
+      throw new Error("Mistral returned invalid JSON");
+    }
+  }
+  if (content && typeof content === "object") return content;
   try {
-    values = JSON.parse((message && message.content) || "{}");
+    return JSON.parse((content || "{}"));
   } catch (error) {
     throw new Error("Mistral returned invalid JSON");
   }
+}
+
+function adaptMistralReply(jevRequest, reply) {
+  const message = reply && reply.choices && reply.choices[0] && reply.choices[0].message;
+  const values = mistralContentJson(message && message.content);
   const usage = reply.usage || {};
   return {
     model: MISTRAL_MODEL,
